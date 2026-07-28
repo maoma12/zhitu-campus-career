@@ -1,0 +1,4054 @@
+"use client";
+
+import {
+  ChangeEvent,
+  RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  AuthSession,
+  cloudConfigured,
+  consumeAuthRedirect,
+  getSession,
+  loadWorkspace,
+  saveWorkspace,
+  signInWithPassword,
+  signOut,
+  signUpWithPassword,
+} from "./lib/supabase-client";
+import {
+  extractResumeText,
+  parseResumeText,
+  ParsedResumeText,
+} from "./lib/resume-import";
+
+type View = "dashboard" | "editor" | "jd" | "optimize";
+type Template = "classic" | "azure" | "sidebar";
+type ModuleKey =
+  | "basic"
+  | "experience"
+  | "education"
+  | "project"
+  | "skills"
+  | "certificate"
+  | "evaluation"
+  | "portfolio";
+
+type Experience = {
+  id: string;
+  company: string;
+  role: string;
+  period: string;
+  description: string;
+};
+
+type Education = {
+  id: string;
+  school: string;
+  major: string;
+  degree: string;
+  period: string;
+  detail: string;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  role: string;
+  period: string;
+  stack: string;
+  description: string;
+};
+
+type Resume = {
+  id: string;
+  name: string;
+  target: string;
+  updated: string;
+  completion: number;
+  version: number;
+  basic: {
+    name: string;
+    phone: string;
+    email: string;
+    city: string;
+    target: string;
+    summary: string;
+    avatar: string;
+  };
+  experiences: Experience[];
+  educations: Education[];
+  projects: Project[];
+  skills: string;
+  certificate: string;
+  evaluation: string;
+  portfolio: string;
+  moduleOrder: ModuleKey[];
+  hiddenModules: ModuleKey[];
+};
+
+type ResumeSnapshot = {
+  id: string;
+  label: string;
+  createdAt: string;
+  resume: Resume;
+};
+
+type ResumeHistory = Record<string, ResumeSnapshot[]>;
+
+type StoredWorkspace = {
+  resumes: Resume[];
+  currentId: string;
+  template: Template;
+  histories: ResumeHistory;
+};
+
+type Suggestion = {
+  id: number;
+  module: string;
+  kind: string;
+  keyword: string;
+  original: string;
+  optimized: string;
+  reason: string;
+  status: "pending" | "accepted" | "rejected";
+  safe: boolean;
+  applyTo?: "skills" | "summary" | "experience" | "project";
+  targetId?: string;
+};
+
+type JDAnalysisResult = {
+  score: number;
+  keywords: string[];
+  matched: string[];
+  missing: string[];
+  questions: [string, string, string][];
+};
+
+const moduleMeta: Record<ModuleKey, { label: string; icon: string }> = {
+  basic: { label: "基本信息", icon: "人" },
+  experience: { label: "实习经历", icon: "历" },
+  education: { label: "教育经历", icon: "学" },
+  project: { label: "项目经历", icon: "项" },
+  skills: { label: "技能特长", icon: "技" },
+  certificate: { label: "证书荣誉", icon: "证" },
+  evaluation: { label: "自我评价", icon: "评" },
+  portfolio: { label: "作品展示", icon: "链" },
+};
+
+const defaultOrder: ModuleKey[] = [
+  "basic",
+  "experience",
+  "education",
+  "project",
+  "skills",
+  "certificate",
+  "evaluation",
+  "portfolio",
+];
+
+const seedResume: Resume = {
+  id: "resume-main",
+  name: "Java 后端开发校招简历",
+  target: "Java 后端开发实习生",
+  updated: "刚刚",
+  completion: 88,
+  version: 3,
+  basic: {
+    name: "陈锚炀",
+    phone: "150 1729 4882",
+    email: "2687922667@qq.com",
+    city: "深圳",
+    target: "Java 后端开发实习生",
+    summary:
+      "通信工程专业本科生，具备 Java、SQL 与数据结构基础，有产品需求分析和软硬件协同项目经验。",
+    avatar: "",
+  },
+  experiences: [{
+    id: "experience-seed",
+    company: "顺丰速运集团",
+    role: "助理产品经理 · 产业园信息化组",
+    period: "2026.01 — 2026.04",
+    description:
+      "负责园区人员轨迹数据整理与日报输出，基于用户反馈梳理定位、排班与告警需求；协同研发团队推进需求评审、版本迭代与上线验收。",
+  }],
+  educations: [{
+    id: "education-seed",
+    school: "深圳大学",
+    major: "通信工程 · 电子与信息工程学院",
+    degree: "本科 · 全日制",
+    period: "2023.09 — 2027.06",
+    detail:
+      "GPA 3.45/4.5，专业前 30%；核心课程：数据结构（92）、面向对象程序设计（88）、计算机网络。",
+  }],
+  projects: [{
+    id: "project-seed",
+    name: "无人机物流调度管理系统",
+    role: "核心开发",
+    period: "2025.11 — 2026.12",
+    stack: "C++ · OOP · Cursor",
+    description:
+      "完成多文件 C++ 项目结构设计，基于继承与派生类实现任务分发、订单分配和本地数据持久化；独立设计控制台交互流程。",
+  }],
+  skills:
+    "Java · C/C++ · SQL · 数据结构 · Git · 墨刀 · Excel · 英语六级",
+  certificate: "全国大学生电子设计竞赛校级一等奖 · 大学英语六级",
+  evaluation:
+    "逻辑清晰，能够从用户问题中拆解需求并协同推进落地；保持对技术实现的好奇心和持续学习习惯。",
+  portfolio: "GitHub · github.com/chen-maoyang  ｜  作品集 · portfolio.example.com",
+  moduleOrder: defaultOrder,
+  hiddenModules: [],
+};
+
+const secondResume: Resume = {
+  ...seedResume,
+  id: "resume-product",
+  name: "产品经理实习简历",
+  target: "产品经理实习生",
+  updated: "昨天 18:42",
+  completion: 82,
+  version: 2,
+  basic: { ...seedResume.basic, target: "产品经理实习生" },
+  experiences: seedResume.experiences.map((item) => ({ ...item, id: "experience-product" })),
+  educations: seedResume.educations.map((item) => ({ ...item, id: "education-product" })),
+  projects: seedResume.projects.map((item) => ({ ...item, id: "project-product" })),
+};
+
+const blankResume: Resume = {
+  id: "resume-blank",
+  name: "我的第一份简历",
+  target: "",
+  updated: "刚刚",
+  completion: 10,
+  version: 1,
+  basic: {
+    name: "",
+    phone: "",
+    email: "",
+    city: "",
+    target: "",
+    summary: "",
+    avatar: "",
+  },
+  experiences: [],
+  educations: [],
+  projects: [],
+  skills: "",
+  certificate: "",
+  evaluation: "",
+  portfolio: "",
+  moduleOrder: defaultOrder,
+  hiddenModules: [],
+};
+
+const initialSuggestions: Suggestion[] = [
+  {
+    id: 1,
+    module: "实习经历",
+    kind: "成果前置",
+    keyword: "数据分析",
+    original:
+      "负责园区人员轨迹数据整理与日报输出，基于用户反馈梳理定位、排班与告警需求。",
+    optimized:
+      "围绕园区人员轨迹场景，整理业务数据并输出日报；结合用户反馈梳理定位、排班与告警需求，为需求评审提供依据。",
+    reason: "保留原有事实，将业务场景、动作和产出按阅读顺序重组。",
+    status: "pending",
+    safe: true,
+  },
+  {
+    id: 2,
+    module: "项目经历",
+    kind: "关键词强化",
+    keyword: "面向对象",
+    original:
+      "基于继承与派生类实现任务分发、订单分配和本地数据持久化。",
+    optimized:
+      "运用面向对象设计方法，以继承与派生类完成任务分发、订单分配及本地数据持久化。",
+    reason: "强化简历中已经存在、且与 JD 相关的面向对象能力。",
+    status: "pending",
+    safe: true,
+  },
+  {
+    id: 3,
+    module: "技能特长",
+    kind: "结构调整",
+    keyword: "Java / SQL",
+    original: "Java · C/C++ · SQL · 数据结构 · Git · 墨刀 · Excel",
+    optimized: "开发基础：Java · SQL · 数据结构 · Git\n其他工具：C/C++ · 墨刀 · Excel",
+    reason: "将目标岗位相关技能优先展示，不新增技能。",
+    status: "pending",
+    safe: true,
+  },
+  {
+    id: 4,
+    module: "实习经历",
+    kind: "信息补充",
+    keyword: "量化结果",
+    original: "协同研发团队推进需求评审、版本迭代与上线验收。",
+    optimized:
+      "协同【团队角色】推进【版本数量】次需求评审、版本迭代与上线验收，最终实现【真实结果】。",
+    reason: "原文缺少可验证的规模和结果，需要你补充真实信息后才能使用。",
+    status: "pending",
+    safe: false,
+  },
+];
+
+const jdSample = `Java 后端开发实习生
+
+岗位职责：
+1. 参与业务系统后端功能开发、接口设计与单元测试；
+2. 配合产品与测试完成需求分析、问题定位和版本迭代；
+3. 参与数据库表设计及性能优化。
+
+任职要求：
+1. 计算机相关专业本科及以上学历；
+2. 熟悉 Java 基础、面向对象编程与常用集合；
+3. 了解 Spring Boot、MySQL、Git；
+4. 掌握数据结构、TCP/IP 等计算机基础；
+5. 具备良好的沟通能力和学习能力。`;
+
+const jdKeywordRules = [
+  { label: "Java", aliases: ["java"], question: "请说明 Java 面向对象的核心特性，并结合项目举例。" },
+  { label: "Spring Boot", aliases: ["spring boot", "springboot"], question: "请介绍 Spring Boot 自动配置的基本原理。" },
+  { label: "MySQL", aliases: ["mysql"], question: "请说明常用索引类型以及索引失效的场景。" },
+  { label: "SQL", aliases: ["sql", "数据库"], question: "如果数据量增长，你会如何分析和优化一条慢查询？" },
+  { label: "Git", aliases: ["git"], question: "团队协作中你如何处理 Git 分支冲突？" },
+  { label: "数据结构", aliases: ["数据结构", "data structure"], question: "请比较数组、链表和哈希表的适用场景。" },
+  { label: "TCP/IP", aliases: ["tcp/ip", "tcp", "计算机网络"], question: "请说明 TCP 三次握手和四次挥手的过程。" },
+  { label: "Linux", aliases: ["linux"], question: "你常用哪些 Linux 命令排查进程或网络问题？" },
+  { label: "Redis", aliases: ["redis"], question: "请说明 Redis 常见数据结构及其适用场景。" },
+  { label: "Python", aliases: ["python"], question: "请介绍你用 Python 完成过的一个具体任务。" },
+  { label: "C/C++", aliases: ["c++", "c/c++"], question: "请说明 C++ 中继承与多态的实现方式。" },
+  { label: "React", aliases: ["react"], question: "请说明 React 状态更新与组件渲染之间的关系。" },
+  { label: "Vue", aliases: ["vue"], question: "请介绍 Vue 响应式系统的基本思路。" },
+  { label: "沟通协作", aliases: ["沟通", "协作", "团队合作"], question: "请举例说明你如何协调不同角色推进一项任务。" },
+  { label: "学习能力", aliases: ["学习能力", "快速学习"], question: "请举例说明你如何在短时间内掌握一项新技能。" },
+];
+
+function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
+  const jdLower = jd.toLowerCase();
+  const resumeText = JSON.stringify(resume).toLowerCase();
+  const selected = jdKeywordRules.filter((rule) =>
+    rule.aliases.some((alias) => jdLower.includes(alias.toLowerCase())),
+  );
+  const matchedRules = selected.filter((rule) =>
+    rule.aliases.some((alias) => resumeText.includes(alias.toLowerCase())),
+  );
+  const missingRules = selected.filter((rule) => !matchedRules.includes(rule));
+  const score = selected.length
+    ? Math.round((matchedRules.length / selected.length) * 100)
+    : 0;
+  const questions: [string, string, string][] = selected.slice(0, 7).map((rule) => [
+    missingRules.includes(rule) ? "待补充能力" : "岗位重点",
+    rule.question,
+    `来源：JD 关键词「${rule.label}」`,
+  ]);
+  if (questions.length < 5) {
+    questions.push(
+      ["项目深挖", "请选择一个最能代表你的项目，说明背景、个人任务、行动和结果。", "来源：简历项目经历"],
+      ["行为面试", "请举例说明你遇到困难后如何定位问题并推动解决。", "来源：通用校招面试"],
+    );
+  }
+  return {
+    score,
+    keywords: selected.map((rule) => rule.label),
+    matched: matchedRules.map((rule) => rule.label),
+    missing: missingRules.map((rule) => rule.label),
+    questions: questions.slice(0, 8),
+  };
+}
+
+function buildRuleSuggestions(
+  resume: Resume,
+  analysis: JDAnalysisResult,
+): Suggestion[] {
+  const skillParts = resume.skills
+    .split(/[·,，、|｜\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const priority = (value: string) =>
+    analysis.matched.some((keyword) =>
+      value.toLowerCase().includes(keyword.toLowerCase()),
+    )
+      ? 0
+      : 1;
+  const orderedSkills = [...skillParts]
+    .sort((a, b) => priority(a) - priority(b))
+    .join(" · ");
+  const experience = resume.experiences[0];
+  const project = resume.projects[0];
+  const suggestions: Suggestion[] = [];
+
+  if (resume.skills && orderedSkills !== resume.skills) {
+    suggestions.push({
+      id: suggestions.length + 1,
+      module: "技能特长",
+      kind: "岗位相关项前置",
+      keyword: analysis.matched.slice(0, 3).join(" / ") || "技能排序",
+      original: resume.skills,
+      optimized: orderedSkills,
+      reason: "仅调整已有技能的展示顺序，不添加新技能。",
+      status: "pending",
+      safe: true,
+      applyTo: "skills",
+    });
+  }
+
+  if (resume.basic.summary && resume.basic.target) {
+    const optimized = `${resume.basic.target}方向；${resume.basic.summary}`
+      .replace(/[；;]{2,}/g, "；")
+      .trim();
+    if (optimized !== resume.basic.summary) {
+      suggestions.push({
+        id: suggestions.length + 1,
+        module: "个人简介",
+        kind: "求职方向前置",
+        keyword: resume.basic.target,
+        original: resume.basic.summary,
+        optimized,
+        reason: "将简历中已经填写的求职目标前置，保留原简介事实。",
+        status: "pending",
+        safe: true,
+        applyTo: "summary",
+      });
+    }
+  }
+
+  if (experience?.description) {
+    const optimized = experience.description
+      .split(/[；;]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("；");
+    suggestions.push({
+      id: suggestions.length + 1,
+      module: "实习经历",
+      kind: "长句拆分",
+      keyword: analysis.matched[0] ?? "经历表达",
+      original: experience.description,
+      optimized,
+      reason: "仅整理原有句子和标点，不修改时间、职责或结果。",
+      status: "pending",
+      safe: true,
+      applyTo: "experience",
+      targetId: experience.id,
+    });
+  }
+
+  if (project?.description) {
+    suggestions.push({
+      id: suggestions.length + 1,
+      module: "项目经历",
+      kind: "贡献表达检查",
+      keyword: analysis.matched.find((item) =>
+        project.description.toLowerCase().includes(item.toLowerCase()),
+      ) ?? "项目贡献",
+      original: project.description,
+      optimized: project.description,
+      reason: "当前规则未发现可安全自动改写的内容，建议人工确认个人贡献和结果是否清晰。",
+      status: "pending",
+      safe: true,
+      applyTo: "project",
+      targetId: project.id,
+    });
+  }
+
+  suggestions.push({
+    id: suggestions.length + 1,
+    module: "缺失项",
+    kind: "需要真实信息",
+    keyword: analysis.missing.slice(0, 3).join(" / ") || "量化结果",
+    original: "简历当前未提供对应证据。",
+    optimized: "如你确实具备相关经历，请手动补充真实场景、行动和结果。",
+    reason: "规则不会把 JD 中的缺失技能直接写入简历。",
+    status: "pending",
+    safe: false,
+  });
+
+  return suggestions;
+}
+
+function storageTime() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+function cloneResume(resume: Resume): Resume {
+  return JSON.parse(JSON.stringify(resume)) as Resume;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function safeString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeModuleList(value: unknown, fallback: ModuleKey[]) {
+  if (!Array.isArray(value)) return [...fallback];
+  const allowed = new Set<ModuleKey>(defaultOrder);
+  const result = value.filter(
+    (item): item is ModuleKey =>
+      typeof item === "string" && allowed.has(item as ModuleKey),
+  );
+  return Array.from(new Set(result));
+}
+
+function normalizeResume(value: unknown): Resume {
+  const safeValue = isRecord(value) ? value : {};
+  const safeBasic = isRecord(safeValue.basic) ? safeValue.basic : {};
+  const legacyExperience = isRecord(safeValue.experience)
+    ? safeValue.experience
+    : null;
+  const legacyEducation = isRecord(safeValue.education)
+    ? safeValue.education
+    : null;
+  const legacyProject = isRecord(safeValue.project) ? safeValue.project : null;
+
+  const normalizeExperience = (item: unknown, index: number): Experience => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `experience-${Date.now()}-${index}`,
+      company: safeString(source.company),
+      role: safeString(source.role),
+      period: safeString(source.period),
+      description: safeString(source.description),
+    };
+  };
+  const normalizeEducation = (item: unknown, index: number): Education => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `education-${Date.now()}-${index}`,
+      school: safeString(source.school),
+      major: safeString(source.major),
+      degree: safeString(source.degree),
+      period: safeString(source.period),
+      detail: safeString(source.detail),
+    };
+  };
+  const normalizeProject = (item: unknown, index: number): Project => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `project-${Date.now()}-${index}`,
+      name: safeString(source.name),
+      role: safeString(source.role),
+      period: safeString(source.period),
+      stack: safeString(source.stack),
+      description: safeString(source.description),
+    };
+  };
+
+  const moduleOrder = normalizeModuleList(
+    safeValue.moduleOrder,
+    defaultOrder,
+  );
+  defaultOrder.forEach((key) => {
+    if (!moduleOrder.includes(key)) moduleOrder.push(key);
+  });
+
+  return {
+    id: safeString(safeValue.id) || `resume-${Date.now()}`,
+    name: safeString(safeValue.name, blankResume.name),
+    target: safeString(safeValue.target),
+    updated: safeString(safeValue.updated, "刚刚"),
+    completion: Math.max(
+      0,
+      Math.min(100, safeNumber(safeValue.completion, 0)),
+    ),
+    version: Math.max(1, Math.floor(safeNumber(safeValue.version, 1))),
+    basic: {
+      name: safeString(safeBasic.name),
+      phone: safeString(safeBasic.phone),
+      email: safeString(safeBasic.email),
+      city: safeString(safeBasic.city),
+      target: safeString(safeBasic.target, safeString(safeValue.target)),
+      summary: safeString(safeBasic.summary),
+      avatar: safeString(safeBasic.avatar),
+    },
+    experiences: Array.isArray(safeValue.experiences)
+      ? safeValue.experiences.map(normalizeExperience)
+      : legacyExperience
+        ? [normalizeExperience(legacyExperience, 0)]
+        : [],
+    educations: Array.isArray(safeValue.educations)
+      ? safeValue.educations.map(normalizeEducation)
+      : legacyEducation
+        ? [normalizeEducation(legacyEducation, 0)]
+        : [],
+    projects: Array.isArray(safeValue.projects)
+      ? safeValue.projects.map(normalizeProject)
+      : legacyProject
+        ? [normalizeProject(legacyProject, 0)]
+        : [],
+    skills: safeString(safeValue.skills),
+    certificate: safeString(safeValue.certificate),
+    evaluation: safeString(safeValue.evaluation),
+    portfolio: safeString(safeValue.portfolio),
+    moduleOrder,
+    hiddenModules: normalizeModuleList(safeValue.hiddenModules, []),
+  };
+}
+
+function snapshotTime() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+type ExportSection = { heading: string; lines: string[] };
+
+function resumeExportSections(resume: Resume): ExportSection[] {
+  const visible = new Set(
+    resume.moduleOrder.filter((key) => !resume.hiddenModules.includes(key)),
+  );
+  const sections: ExportSection[] = [];
+  if (visible.has("experience") && resume.experiences.length) {
+    sections.push({
+      heading: "实习经历",
+      lines: resume.experiences.flatMap((item) => [
+        `${item.company}｜${item.role}｜${item.period}`,
+        item.description,
+      ]),
+    });
+  }
+  if (visible.has("education") && resume.educations.length) {
+    sections.push({
+      heading: "教育经历",
+      lines: resume.educations.flatMap((item) => [
+        `${item.school}｜${item.major}｜${item.degree}｜${item.period}`,
+        item.detail,
+      ]),
+    });
+  }
+  if (visible.has("project") && resume.projects.length) {
+    sections.push({
+      heading: "项目经历",
+      lines: resume.projects.flatMap((item) => [
+        `${item.name}｜${item.role}｜${item.period}`,
+        item.stack ? `技术栈：${item.stack}` : "",
+        item.description,
+      ]),
+    });
+  }
+  const simple: [ModuleKey, string, string][] = [
+    ["skills", "技能特长", resume.skills],
+    ["certificate", "证书荣誉", resume.certificate],
+    ["evaluation", "自我评价", resume.evaluation],
+    ["portfolio", "作品链接", resume.portfolio],
+  ];
+  simple.forEach(([key, heading, text]) => {
+    if (visible.has(key) && text.trim()) sections.push({ heading, lines: [text] });
+  });
+  return sections;
+}
+
+function joinBytes(chunks: Uint8Array[]) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    output.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return output;
+}
+
+function utf16Hex(value: string) {
+  let result = "";
+  for (let index = 0; index < value.length; index += 1) {
+    result += value.charCodeAt(index).toString(16).padStart(4, "0");
+  }
+  return result;
+}
+
+function wrapExportText(value: string, maxWidth = 84) {
+  const output: string[] = [];
+  value
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .forEach((paragraph) => {
+      let line = "";
+      let width = 0;
+      Array.from(paragraph).forEach((character) => {
+        const nextWidth = /[\u0000-\u00ff]/.test(character) ? 1 : 2;
+        if (line && width + nextWidth > maxWidth) {
+          output.push(line);
+          line = "";
+          width = 0;
+        }
+        line += character;
+        width += nextWidth;
+      });
+      if (line) output.push(line);
+    });
+  return output.length ? output : [""];
+}
+
+function buildAtsPdf(resume: Resume) {
+  const encode = (value: string) => new TextEncoder().encode(value);
+  const lines: { text: string; size: number; gap: number }[] = [
+    { text: resume.basic.name || "姓名", size: 18, gap: 24 },
+    { text: resume.basic.target || resume.target, size: 11, gap: 17 },
+    {
+      text: [resume.basic.phone, resume.basic.email, resume.basic.city]
+        .filter(Boolean)
+        .join("｜"),
+      size: 9,
+      gap: 18,
+    },
+  ];
+  if (resume.basic.summary.trim()) {
+    lines.push({ text: "个人简介", size: 12, gap: 18 });
+    wrapExportText(resume.basic.summary).forEach((text) =>
+      lines.push({ text, size: 9, gap: 14 }),
+    );
+  }
+  resumeExportSections(resume).forEach((section) => {
+    lines.push({ text: section.heading, size: 12, gap: 19 });
+    section.lines.filter(Boolean).forEach((entry) => {
+      wrapExportText(entry).forEach((text) =>
+        lines.push({ text, size: 9, gap: 14 }),
+      );
+    });
+  });
+
+  const pages: typeof lines[] = [];
+  let page: typeof lines = [];
+  let used = 0;
+  lines.forEach((line) => {
+    if (used + line.gap > 742 && page.length) {
+      pages.push(page);
+      page = [];
+      used = 0;
+    }
+    page.push(line);
+    used += line.gap;
+  });
+  if (page.length) pages.push(page);
+
+  const objects: (string | Uint8Array)[] = [];
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  const fontId = 3;
+  const cidFontId = 4;
+  const descriptorId = 5;
+  const toUnicodeId = 6;
+  objects[fontId] =
+    `<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [${cidFontId} 0 R] /ToUnicode ${toUnicodeId} 0 R >>`;
+  objects[cidFontId] =
+    `<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 2 >> /FontDescriptor ${descriptorId} 0 R /DW 1000 /W [0 31 500 32 32 250 33 126 500] >>`;
+  objects[descriptorId] =
+    "<< /Type /FontDescriptor /FontName /STSong-Light /Flags 6 /FontBBox [-250 -140 600 1000] /ItalicAngle 0 /Ascent 752 /Descent -271 /CapHeight 737 /StemV 58 >>";
+  const unicodeMap = encode(
+    "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfrange\n<0000> <FFFF> <0000>\nendbfrange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend",
+  );
+  objects[toUnicodeId] = joinBytes([
+    encode(`<< /Length ${unicodeMap.length} >>\nstream\n`),
+    unicodeMap,
+    encode("\nendstream"),
+  ]);
+  const pageIds: number[] = [];
+  pages.forEach((pageLines) => {
+    const pageId = objects.length;
+    const contentId = pageId + 1;
+    pageIds.push(pageId);
+    let y = 792;
+    const stream = pageLines
+      .map((line) => {
+        const command = `BT /F1 ${line.size} Tf 1 0 0 1 50 ${y} Tm <${utf16Hex(line.text)}> Tj ET`;
+        y -= line.gap;
+        return command;
+      })
+      .join("\n");
+    const streamBytes = encode(stream);
+    objects[pageId] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId] = joinBytes([
+      encode(`<< /Length ${streamBytes.length} >>\nstream\n`),
+      streamBytes,
+      encode("\nendstream"),
+    ]);
+  });
+  objects[2] =
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [0];
+  let length = 0;
+  const push = (chunk: Uint8Array) => {
+    chunks.push(chunk);
+    length += chunk.length;
+  };
+  const object = (id: number, body: string | Uint8Array) => {
+    offsets[id] = length;
+    push(encode(`${id} 0 obj\n`));
+    push(typeof body === "string" ? encode(body) : body);
+    push(encode("\nendobj\n"));
+  };
+
+  push(encode("%PDF-1.4\n"));
+  push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+  for (let id = 1; id < objects.length; id += 1) object(id, objects[id]);
+
+  const xrefOffset = length;
+  let xref = `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) {
+    xref += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  push(encode(xref));
+  return joinBytes(chunks);
+}
+
+function buildVisualPdf(jpeg: Uint8Array, width: number, height: number) {
+  const encode = (value: string) => new TextEncoder().encode(value);
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [0];
+  let length = 0;
+  const push = (chunk: Uint8Array) => {
+    chunks.push(chunk);
+    length += chunk.length;
+  };
+  const object = (id: number, body: string | Uint8Array) => {
+    offsets[id] = length;
+    push(encode(`${id} 0 obj\n`));
+    push(typeof body === "string" ? encode(body) : body);
+    push(encode("\nendobj\n"));
+  };
+  push(encode("%PDF-1.4\n"));
+  push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+  object(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+  object(
+    3,
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>",
+  );
+  offsets[4] = length;
+  push(encode("4 0 obj\n"));
+  push(
+    encode(
+      `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
+    ),
+  );
+  push(jpeg);
+  push(encode("\nendstream\nendobj\n"));
+  const content = encode("q\n595.28 0 0 841.89 0 0 cm\n/Im0 Do\nQ\n");
+  object(
+    5,
+    joinBytes([
+      encode(`<< /Length ${content.length} >>\nstream\n`),
+      content,
+      encode("endstream"),
+    ]),
+  );
+  const xrefOffset = length;
+  let xref = "xref\n0 6\n0000000000 65535 f \n";
+  for (let id = 1; id <= 5; id += 1) {
+    xref += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  push(encode(xref));
+  return joinBytes(chunks);
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function crc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipStored(files: { name: string; data: Uint8Array }[]) {
+  const encode = (value: string) => new TextEncoder().encode(value);
+  const locals: Uint8Array[] = [];
+  const centrals: Uint8Array[] = [];
+  let offset = 0;
+  const viewBytes = (length: number, write: (view: DataView) => void) => {
+    const bytes = new Uint8Array(length);
+    write(new DataView(bytes.buffer));
+    return bytes;
+  };
+  files.forEach(({ name, data }) => {
+    const nameBytes = encode(name);
+    const checksum = crc32(data);
+    const local = viewBytes(30, (view) => {
+      view.setUint32(0, 0x04034b50, true);
+      view.setUint16(4, 20, true);
+      view.setUint16(6, 0x0800, true);
+      view.setUint32(14, checksum, true);
+      view.setUint32(18, data.length, true);
+      view.setUint32(22, data.length, true);
+      view.setUint16(26, nameBytes.length, true);
+    });
+    locals.push(local, nameBytes, data);
+    const central = viewBytes(46, (view) => {
+      view.setUint32(0, 0x02014b50, true);
+      view.setUint16(4, 20, true);
+      view.setUint16(6, 20, true);
+      view.setUint16(8, 0x0800, true);
+      view.setUint32(16, checksum, true);
+      view.setUint32(20, data.length, true);
+      view.setUint32(24, data.length, true);
+      view.setUint16(28, nameBytes.length, true);
+      view.setUint32(42, offset, true);
+    });
+    centrals.push(central, nameBytes);
+    offset += local.length + nameBytes.length + data.length;
+  });
+  const centralData = joinBytes(centrals);
+  const end = viewBytes(22, (view) => {
+    view.setUint32(0, 0x06054b50, true);
+    view.setUint16(8, files.length, true);
+    view.setUint16(10, files.length, true);
+    view.setUint32(12, centralData.length, true);
+    view.setUint32(16, offset, true);
+  });
+  return joinBytes([...locals, centralData, end]);
+}
+
+function buildDocx(resume: Resume) {
+  const encode = (value: string) => new TextEncoder().encode(value);
+  const paragraph = (
+    text: string,
+    {
+      bold = false,
+      size = 20,
+      color = "25302A",
+      before = 0,
+      after = 70,
+      border = false,
+      keepNext = false,
+    }: {
+      bold?: boolean;
+      size?: number;
+      color?: string;
+      before?: number;
+      after?: number;
+      border?: boolean;
+      keepNext?: boolean;
+    } = {},
+  ) =>
+    `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}" w:line="276" w:lineRule="auto"/>${keepNext ? "<w:keepNext/>" : ""}${border ? '<w:pBdr><w:bottom w:val="single" w:sz="7" w:space="5" w:color="315F4C"/></w:pBdr>' : ""}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Microsoft YaHei"/>${bold ? "<w:b/><w:bCs/>" : ""}<w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
+  const sectionHeading = (text: string) =>
+    paragraph(text, {
+      bold: true,
+      size: 23,
+      color: "173D2D",
+      before: 150,
+      after: 100,
+      border: true,
+      keepNext: true,
+    });
+  const entryTitle = (text: string) =>
+    paragraph(text, { bold: true, size: 20, before: 40, after: 45, keepNext: true });
+  const bodyBlocks: string[] = [];
+  if (!resume.hiddenModules.includes("experience") && resume.experiences.length) {
+    bodyBlocks.push(sectionHeading("实习经历"));
+    resume.experiences.forEach((item) => {
+      bodyBlocks.push(entryTitle(`${item.company} ｜ ${item.role} ｜ ${item.period}`));
+      if (item.description) bodyBlocks.push(paragraph(item.description));
+    });
+  }
+  if (!resume.hiddenModules.includes("education") && resume.educations.length) {
+    bodyBlocks.push(sectionHeading("教育经历"));
+    resume.educations.forEach((item) => {
+      bodyBlocks.push(
+        entryTitle(`${item.school} ｜ ${item.major} ｜ ${item.degree} ｜ ${item.period}`),
+      );
+      if (item.detail) bodyBlocks.push(paragraph(item.detail));
+    });
+  }
+  if (!resume.hiddenModules.includes("project") && resume.projects.length) {
+    bodyBlocks.push(sectionHeading("项目经历"));
+    resume.projects.forEach((item) => {
+      bodyBlocks.push(entryTitle(`${item.name} ｜ ${item.role} ｜ ${item.period}`));
+      if (item.stack) bodyBlocks.push(paragraph(`技术栈：${item.stack}`, { bold: true }));
+      if (item.description) bodyBlocks.push(paragraph(item.description));
+    });
+  }
+  const simpleSections: [ModuleKey, string, string][] = [
+    ["skills", "技能特长", resume.skills],
+    ["certificate", "证书荣誉", resume.certificate],
+    ["evaluation", "自我评价", resume.evaluation],
+    ["portfolio", "作品链接", resume.portfolio],
+  ];
+  simpleSections.forEach(([key, heading, text]) => {
+    if (!resume.hiddenModules.includes(key) && text.trim()) {
+      bodyBlocks.push(sectionHeading(heading), paragraph(text));
+    }
+  });
+  const body = [
+    paragraph(resume.basic.name || "姓名", {
+      bold: true,
+      size: 38,
+      color: "173D2D",
+      after: 75,
+    }),
+    paragraph(resume.basic.target || resume.target, {
+      bold: true,
+      size: 22,
+      color: "315F4C",
+      after: 60,
+    }),
+    paragraph(
+      [resume.basic.phone, resume.basic.email, resume.basic.city]
+        .filter(Boolean)
+        .join(" ｜ "),
+      { size: 18, color: "5F6D65", after: 100 },
+    ),
+    ...(resume.basic.summary.trim()
+      ? [sectionHeading("个人简介"), paragraph(resume.basic.summary)]
+      : []),
+    ...bodyBlocks,
+  ].join("");
+  const documentXml =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="760" w:right="900" w:bottom="760" w:left="900" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const stylesXml =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Microsoft YaHei"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="zh-CN" w:eastAsia="zh-CN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="70" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`;
+  return zipStored([
+    {
+      name: "[Content_Types].xml",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`,
+      ),
+    },
+    {
+      name: "_rels/.rels",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+      ),
+    },
+    { name: "word/document.xml", data: encode(documentXml) },
+    { name: "word/styles.xml", data: encode(stylesXml) },
+    {
+      name: "word/_rels/document.xml.rels",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+      ),
+    },
+  ]);
+}
+
+function buildPreviewDocx(png: Uint8Array) {
+  const encode = (value: string) => new TextEncoder().encode(value);
+  const documentXml =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="7559055" cy="10692000"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="简历预览"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="resume.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7559055" cy="10692000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  return zipStored([
+    {
+      name: "[Content_Types].xml",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+      ),
+    },
+    {
+      name: "_rels/.rels",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+      ),
+    },
+    {
+      name: "word/_rels/document.xml.rels",
+      data: encode(
+        `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/resume.png"/></Relationships>`,
+      ),
+    },
+    { name: "word/document.xml", data: encode(documentXml) },
+    { name: "word/media/resume.png", data: png },
+  ]);
+}
+
+export default function Home() {
+  const [view, setView] = useState<View>("dashboard");
+  const [resumes, setResumes] = useState<Resume[]>([blankResume]);
+  const [currentId, setCurrentId] = useState(blankResume.id);
+  const [activeModule, setActiveModule] = useState<ModuleKey>("basic");
+  const [template, setTemplate] = useState<Template>("classic");
+  const [saveStatus, setSaveStatus] = useState("已保存");
+  const [ready, setReady] = useState(false);
+  const [toast, setToast] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [newName, setNewName] = useState("我的校招简历");
+  const [showVersion, setShowVersion] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [versionName, setVersionName] = useState("");
+  const [histories, setHistories] = useState<ResumeHistory>({});
+  const [showImport, setShowImport] = useState(false);
+  const [parsedImport, setParsedImport] = useState<ParsedResumeText | null>(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const [importProgress, setImportProgress] = useState(0);
+  const [jdText, setJdText] = useState(jdSample);
+  const [analysisReady, setAnalysisReady] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisTab, setAnalysisTab] = useState("match");
+  const [jdAnalysis, setJdAnalysis] = useState<JDAnalysisResult | null>(null);
+  const [suggestions, setSuggestions] =
+    useState<Suggestion[]>(initialSuggestions);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(1);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const current =
+    resumes.find((resume) => resume.id === currentId) ?? resumes[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    const applyWorkspace = (parsed: unknown) => {
+      if (!isRecord(parsed)) return;
+      const normalizedResumes = Array.isArray(parsed.resumes)
+        ? parsed.resumes.map(normalizeResume)
+        : [];
+      if (normalizedResumes.length) {
+        setResumes(normalizedResumes);
+        const requestedId = safeString(parsed.currentId);
+        setCurrentId(
+          normalizedResumes.some((resume) => resume.id === requestedId)
+            ? requestedId
+            : normalizedResumes[0].id,
+        );
+      }
+      if (
+        parsed.template === "classic" ||
+        parsed.template === "azure" ||
+        parsed.template === "sidebar"
+      ) {
+        setTemplate(parsed.template);
+      }
+      if (isRecord(parsed.histories)) {
+        const migrated = Object.fromEntries(
+          Object.entries(parsed.histories).map(([resumeId, snapshots]) => [
+            resumeId,
+            Array.isArray(snapshots)
+              ? snapshots
+                  .filter(isRecord)
+                  .map((snapshot, index) => ({
+                    id:
+                      safeString(snapshot.id) ||
+                      `history-${Date.now()}-${index}`,
+                    label: safeString(snapshot.label, `历史版本 ${index + 1}`),
+                    createdAt: safeString(snapshot.createdAt),
+                    resume: normalizeResume(snapshot.resume),
+                  }))
+              : [],
+          ]),
+        );
+        setHistories(migrated);
+      }
+    };
+    const initialize = async () => {
+      try {
+        const redirected = await consumeAuthRedirect();
+        const activeSession = redirected ?? (await getSession());
+        if (cancelled) return;
+        setSession(activeSession);
+
+        if (activeSession) {
+          const cloud = await loadWorkspace<StoredWorkspace>(activeSession);
+          if (cancelled) return;
+          if (cloud) {
+            applyWorkspace(cloud);
+          } else {
+            const local =
+              localStorage.getItem("zhitu-workspace-v1") ??
+              localStorage.getItem("campus-career-prototype");
+            if (local) applyWorkspace(JSON.parse(local));
+          }
+        } else if (!cloudConfigured) {
+          const local =
+            localStorage.getItem("zhitu-workspace-v1") ??
+            localStorage.getItem("campus-career-prototype");
+          if (local) applyWorkspace(JSON.parse(local));
+        }
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : "登录状态读取失败");
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    };
+    void initialize();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    setSaveStatus("保存中…");
+    const timer = window.setTimeout(() => {
+      const workspace: StoredWorkspace = {
+        resumes,
+        currentId,
+        template,
+        histories,
+      };
+      localStorage.setItem(
+        "zhitu-workspace-v1",
+        JSON.stringify(workspace),
+      );
+      if (session) {
+        void saveWorkspace(session, workspace)
+          .then(() => setSaveStatus(`云端已保存 ${storageTime()}`))
+          .catch(() => setSaveStatus("云端保存失败，已保存在本机"));
+      } else {
+        setSaveStatus(`本机已保存 ${storageTime()}`);
+      }
+    }, 550);
+    return () => window.clearTimeout(timer);
+  }, [resumes, currentId, template, histories, ready, session]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const updateCurrent = (patch: Partial<Resume>) => {
+    setResumes((items) =>
+      items.map((item) =>
+        item.id === currentId
+          ? { ...item, ...patch, updated: "刚刚" }
+          : item,
+      ),
+    );
+  };
+
+  const updateNested = (
+    key: "basic",
+    field: string,
+    value: string,
+  ) => {
+    updateCurrent({
+      [key]: { ...current[key], [field]: value },
+    } as Partial<Resume>);
+  };
+
+  const updateEntry = (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    patch: Record<string, string>,
+  ) => {
+    updateCurrent({
+      [collection]: current[collection].map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    } as Partial<Resume>);
+  };
+
+  const addEntry = (collection: "experiences" | "educations" | "projects") => {
+    const id = `${collection}-${Date.now()}`;
+    const blank =
+      collection === "experiences"
+        ? { id, company: "", role: "", period: "", description: "" }
+        : collection === "educations"
+          ? { id, school: "", major: "", degree: "", period: "", detail: "" }
+          : { id, name: "", role: "", period: "", stack: "", description: "" };
+    updateCurrent({
+      [collection]: [...current[collection], blank],
+    } as Partial<Resume>);
+  };
+
+  const duplicateEntry = (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => {
+    const source = current[collection].find((item) => item.id === id);
+    if (!source) return;
+    const index = current[collection].findIndex((item) => item.id === id);
+    const next = [...current[collection]];
+    next.splice(index + 1, 0, {
+      ...source,
+      id: `${collection}-${Date.now()}`,
+    });
+    updateCurrent({ [collection]: next } as Partial<Resume>);
+    setToast("已复制一条经历");
+  };
+
+  const deleteEntry = (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => {
+    if (current[collection].length === 1) {
+      setToast("请至少保留一条记录，可清空内容");
+      return;
+    }
+    updateCurrent({
+      [collection]: current[collection].filter((item) => item.id !== id),
+    } as Partial<Resume>);
+  };
+
+  const moveEntry = (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    direction: -1 | 1,
+  ) => {
+    const next = [...current[collection]];
+    const index = next.findIndex((item) => item.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    updateCurrent({ [collection]: next } as Partial<Resume>);
+  };
+
+  const openResume = (id: string) => {
+    setCurrentId(id);
+    setView("editor");
+    setActiveModule("basic");
+  };
+
+  const createResume = () => {
+    const id = `resume-${Date.now()}`;
+    const created: Resume = {
+      ...seedResume,
+      id,
+      name: newName.trim() || "未命名简历",
+      target: "待填写求职目标",
+      updated: "刚刚",
+      completion: 35,
+      version: 1,
+      basic: {
+        name: "",
+        phone: "",
+        email: "",
+        city: "",
+        target: "",
+        summary: "",
+      },
+      experiences: [{
+        id: `experience-${Date.now()}`,
+        company: "",
+        role: "",
+        period: "",
+        description: "",
+      }],
+      educations: [{
+        id: `education-${Date.now()}`,
+        school: "",
+        major: "",
+        degree: "",
+        period: "",
+        detail: "",
+      }],
+      projects: [{
+        id: `project-${Date.now()}`,
+        name: "",
+        role: "",
+        period: "",
+        stack: "",
+        description: "",
+      }],
+      skills: "",
+      certificate: "",
+      evaluation: "",
+      portfolio: "",
+      moduleOrder: [...defaultOrder],
+      hiddenModules: [],
+    };
+    setResumes((items) => [created, ...items]);
+    setCurrentId(id);
+    setShowNew(false);
+    setView("editor");
+    setToast("新简历已创建");
+  };
+
+  const duplicateResume = (resume: Resume) => {
+    const copy = {
+      ...resume,
+      id: `resume-${Date.now()}`,
+      name: `${resume.name} · 副本`,
+      updated: "刚刚",
+      basic: { ...resume.basic },
+      experiences: resume.experiences.map((item) => ({
+        ...item,
+        id: `experience-${Date.now()}-${item.id}`,
+      })),
+      educations: resume.educations.map((item) => ({
+        ...item,
+        id: `education-${Date.now()}-${item.id}`,
+      })),
+      projects: resume.projects.map((item) => ({
+        ...item,
+        id: `project-${Date.now()}-${item.id}`,
+      })),
+    };
+    setResumes((items) => [copy, ...items]);
+    setToast("已复制为新的简历");
+  };
+
+  const deleteResume = (resume: Resume) => {
+    if (resumes.length === 1) {
+      setToast("请至少保留一份简历");
+      return;
+    }
+    if (!window.confirm(`确定删除「${resume.name}」吗？`)) return;
+    setResumes((items) => items.filter((item) => item.id !== resume.id));
+    if (currentId === resume.id) setCurrentId(resumes[0].id);
+    setToast("简历已删除");
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportStatus("正在本地解析文件…");
+    setImportProgress(0);
+    setParsedImport(null);
+    setShowImport(true);
+    try {
+      const text = await extractResumeText(file, (value) => {
+        setImportProgress(Math.round(value * 100));
+        setImportStatus(`正在本地识别图片文字… ${Math.round(value * 100)}%`);
+      });
+      if (!text.trim()) throw new Error("文件中未提取到可用文字");
+      const parsed = parseResumeText(text);
+      setParsedImport(parsed);
+      setImportStatus("解析完成，请导入后逐项校对");
+    } catch (error) {
+      setImportStatus(
+        error instanceof Error ? error.message : "文件解析失败，请换一种格式重试",
+      );
+    }
+  };
+
+  const confirmImport = () => {
+    if (!parsedImport) return;
+    const imported: Resume = normalizeResume({
+      ...blankResume,
+      id: `resume-${Date.now()}`,
+      name: importFileName.replace(/\.(pdf|docx|txt|png|jpe?g)$/i, "") || "导入的简历",
+      updated: "刚刚",
+      basic: {
+        ...blankResume.basic,
+        name: parsedImport.name,
+        phone: parsedImport.phone,
+        email: parsedImport.email,
+        city: parsedImport.city,
+        summary: parsedImport.summary,
+      },
+      experiences: parsedImport.experience
+        ? [{
+            id: `experience-${Date.now()}`,
+            company: parsedImport.experience.split("\n")[0] ?? "",
+            role: "",
+            period: "",
+            description: parsedImport.experience,
+          }]
+        : [],
+      educations: parsedImport.education
+        ? [{
+            id: `education-${Date.now()}`,
+            school: parsedImport.education.split("\n")[0] ?? "",
+            major: "",
+            degree: "",
+            period: "",
+            detail: parsedImport.education,
+          }]
+        : [],
+      projects: parsedImport.project
+        ? [{
+            id: `project-${Date.now()}`,
+            name: parsedImport.project.split("\n")[0] ?? "",
+            role: "",
+            period: "",
+            stack: "",
+            description: parsedImport.project,
+          }]
+        : [],
+      skills: parsedImport.skills,
+      certificate: parsedImport.certificate,
+      evaluation: parsedImport.evaluation,
+      portfolio: parsedImport.portfolio,
+      completion: 45,
+    });
+    setResumes((items) => [imported, ...items]);
+    setShowImport(false);
+    setParsedImport(null);
+    setCurrentId(imported.id);
+    setToast("解析内容已导入，请逐项校对");
+    setView("editor");
+  };
+
+  const updateParsedImport = (
+    field: keyof ParsedResumeText,
+    value: string,
+  ) => {
+    setParsedImport((currentImport) =>
+      currentImport ? { ...currentImport, [field]: value } : currentImport,
+    );
+  };
+
+  const moveModule = (key: ModuleKey, direction: -1 | 1) => {
+    const order = [...current.moduleOrder];
+    const index = order.indexOf(key);
+    const next = index + direction;
+    if (next < 0 || next >= order.length) return;
+    [order[index], order[next]] = [order[next], order[index]];
+    updateCurrent({ moduleOrder: order });
+  };
+
+  const hideModule = (key: ModuleKey) => {
+    if (key === "basic") return;
+    updateCurrent({
+      hiddenModules: [...new Set([...current.hiddenModules, key])],
+    });
+    const next = current.moduleOrder.find(
+      (item) => item !== key && !current.hiddenModules.includes(item),
+    );
+    if (next) setActiveModule(next);
+    setToast(`${moduleMeta[key].label}已从预览中隐藏`);
+  };
+
+  const restoreModule = (key: ModuleKey) => {
+    updateCurrent({
+      hiddenModules: current.hiddenModules.filter((item) => item !== key),
+    });
+    setActiveModule(key);
+    setToast(`${moduleMeta[key].label}已恢复`);
+  };
+
+  const analyzeJD = () => {
+    if (jdText.trim().length < 80) {
+      setToast("请补充完整的岗位职责和任职要求");
+      return;
+    }
+    setAnalyzing(true);
+    setAnalysisReady(false);
+    window.setTimeout(() => {
+      const result = analyzeWithRules(jdText, current);
+      setJdAnalysis(result);
+      const nextSuggestions = buildRuleSuggestions(current, result);
+      setSuggestions(nextSuggestions);
+      setSelectedSuggestion(nextSuggestions[0]?.id ?? 1);
+      setAnalyzing(false);
+      setAnalysisReady(true);
+      setAnalysisTab("match");
+      if (!result.keywords.length) {
+        setToast("未识别到常见岗位关键词，请补充更完整的任职要求");
+      }
+    }, 350);
+  };
+
+  const updateSuggestion = (
+    id: number,
+    status: Suggestion["status"],
+  ) => {
+    const target = suggestions.find((item) => item.id === id);
+    if (target && !target.safe && status === "accepted") {
+      setToast("请先补充真实信息，此建议暂不可接受");
+      return;
+    }
+    setSuggestions((items) =>
+      items.map((item) => (item.id === id ? { ...item, status } : item)),
+    );
+    setToast(status === "accepted" ? "已接受这处修改" : "已保留原文");
+  };
+
+  const saveOptimizedVersion = () => {
+    const acceptedSuggestions = suggestions.filter(
+      (item) => item.status === "accepted",
+    );
+    if (!acceptedSuggestions.length) {
+      setToast("请至少接受一处安全修改");
+      return;
+    }
+    const optimizedResume = cloneResume(current);
+    for (const suggestion of acceptedSuggestions) {
+      if (suggestion.applyTo === "skills") {
+        optimizedResume.skills = suggestion.optimized;
+      } else if (suggestion.applyTo === "summary") {
+        optimizedResume.basic.summary = suggestion.optimized;
+      } else if (suggestion.applyTo === "experience" && suggestion.targetId) {
+        optimizedResume.experiences = optimizedResume.experiences.map((item) =>
+          item.id === suggestion.targetId
+            ? { ...item, description: suggestion.optimized }
+            : item,
+        );
+      } else if (suggestion.applyTo === "project" && suggestion.targetId) {
+        optimizedResume.projects = optimizedResume.projects.map((item) =>
+          item.id === suggestion.targetId
+            ? { ...item, description: suggestion.optimized }
+            : item,
+        );
+      }
+    }
+    saveSnapshot(
+      versionName.trim() || `${current.name} · JD 定向版`,
+      {
+        ...optimizedResume,
+        name: `${current.name.replace(/ · JD 定向版$/, "")} · JD 定向版`,
+      },
+    );
+    setShowVersion(false);
+    setToast(`已保存新版本，包含 ${acceptedSuggestions.length} 处修改`);
+    setView("dashboard");
+  };
+
+  const saveSnapshot = (label: string, source: Resume = current) => {
+    const nextResume = cloneResume({
+      ...source,
+      id: current.id,
+      version: current.version + 1,
+      updated: "刚刚",
+    });
+    const snapshot: ResumeSnapshot = {
+      id: `snapshot-${Date.now()}`,
+      label: label.trim() || `${current.name} · 版本 ${nextResume.version}`,
+      createdAt: snapshotTime(),
+      resume: cloneResume(nextResume),
+    };
+    setHistories((items) => ({
+      ...items,
+      [current.id]: [snapshot, ...(items[current.id] ?? [])],
+    }));
+    setResumes((items) =>
+      items.map((item) => (item.id === current.id ? nextResume : item)),
+    );
+    setShowVersion(false);
+    setVersionName("");
+  };
+
+  const restoreSnapshot = (snapshot: ResumeSnapshot) => {
+    if (!window.confirm(`恢复到「${snapshot.label}」？当前内容会先自动备份。`)) return;
+    const backup: ResumeSnapshot = {
+      id: `snapshot-backup-${Date.now()}`,
+      label: `恢复前自动备份 · V${current.version}`,
+      createdAt: snapshotTime(),
+      resume: cloneResume(current),
+    };
+    const restored = cloneResume({
+      ...snapshot.resume,
+      id: current.id,
+      updated: "刚刚",
+    });
+    setHistories((items) => ({
+      ...items,
+      [current.id]: [backup, ...(items[current.id] ?? [])],
+    }));
+    setResumes((items) =>
+      items.map((item) => (item.id === current.id ? restored : item)),
+    );
+    setShowHistory(false);
+    setToast(`已恢复 ${snapshot.label}`);
+  };
+
+  const submitPasswordAuth = async () => {
+    const email = authEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setAuthMessage("请输入有效的邮箱地址");
+      return;
+    }
+    if (authPassword.length < 8) {
+      setAuthMessage("密码至少需要 8 位");
+      return;
+    }
+    if (authMode === "register" && authPassword !== authPasswordConfirm) {
+      setAuthMessage("两次输入的密码不一致");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthMessage("");
+    try {
+      const activeSession =
+        authMode === "register"
+          ? await signUpWithPassword(email, authPassword)
+          : await signInWithPassword(email, authPassword);
+      setSession(activeSession);
+      window.location.reload();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "登录失败";
+      const friendlyMessage =
+        message === "Invalid login credentials"
+          ? "邮箱或密码错误"
+          : message.toLowerCase().includes("already registered")
+            ? "该邮箱已注册，请切换到登录"
+            : message.toLowerCase().includes("password")
+              ? "密码不符合安全要求，请至少使用 8 位字符"
+              : message;
+      setAuthMessage(friendlyMessage);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut(session);
+    setSession(null);
+    setReady(true);
+  };
+
+  const navItems: { key: View; label: string; icon: string }[] = [
+    { key: "dashboard", label: "简历中心", icon: "简" },
+    { key: "editor", label: "简历编辑", icon: "编" },
+    { key: "jd", label: "JD 匹配", icon: "析" },
+    { key: "optimize", label: "优化对比", icon: "优" },
+  ];
+
+  if (!ready) {
+    return (
+      <main className="auth-page">
+        <div className="auth-loading"><span className="big-spinner" />正在读取你的简历…</div>
+      </main>
+    );
+  }
+
+  if (cloudConfigured && !session) {
+    return (
+      <AuthPage
+        mode={authMode}
+        setMode={(mode) => {
+          setAuthMode(mode);
+          setAuthMessage("");
+          setAuthPassword("");
+          setAuthPasswordConfirm("");
+        }}
+        email={authEmail}
+        setEmail={setAuthEmail}
+        password={authPassword}
+        setPassword={setAuthPassword}
+        passwordConfirm={authPasswordConfirm}
+        setPasswordConfirm={setAuthPasswordConfirm}
+        loading={authLoading}
+        message={authMessage}
+        submit={submitPasswordAuth}
+      />
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="app-sidebar">
+        <button
+          className="brand"
+          onClick={() => setView("dashboard")}
+          aria-label="返回简历中心"
+        >
+          <span className="brand-mark">知</span>
+          <span className="brand-copy">
+            <strong>知途</strong>
+            <small>校招简历助手</small>
+          </span>
+        </button>
+
+        <nav className="main-nav" aria-label="主导航">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              className={view === item.key ? "nav-item active" : "nav-item"}
+              onClick={() => {
+                if (item.key === "optimize" && !analysisReady) {
+                  setView("jd");
+                  setToast("请先完成一次 JD 分析");
+                } else {
+                  setView(item.key);
+                }
+              }}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="truth-card">
+            <span>事实安全</span>
+            <strong>只基于已有内容</strong>
+            <p>规则建议由你确认后生效</p>
+          </div>
+          <button
+            className="profile-chip"
+            onClick={session ? handleSignOut : undefined}
+            title={session ? "点击退出登录" : "本机模式"}
+          >
+            <span>{session?.user.email.slice(0, 1).toUpperCase() ?? "本"}</span>
+            <span>
+              <strong>{session?.user.email ?? "本机模式"}</strong>
+              <small>{session ? "云端同步 · 点击退出" : "数据仅存本机"}</small>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <section className="app-main">
+        {view === "dashboard" && (
+          <Dashboard
+            resumes={resumes}
+            openResume={openResume}
+            duplicateResume={duplicateResume}
+            deleteResume={deleteResume}
+            openHistory={(id) => {
+              setCurrentId(id);
+              setShowHistory(true);
+            }}
+            setShowNew={setShowNew}
+            triggerImport={() => fileRef.current?.click()}
+            goJD={() => setView("jd")}
+          />
+        )}
+
+        {view === "editor" && current && (
+          <Editor
+            resume={current}
+            activeModule={activeModule}
+            setActiveModule={setActiveModule}
+            template={template}
+            setTemplate={setTemplate}
+            saveStatus={saveStatus}
+            updateCurrent={updateCurrent}
+            updateNested={updateNested}
+            moveModule={moveModule}
+            hideModule={hideModule}
+            restoreModule={restoreModule}
+            updateEntry={updateEntry}
+            addEntry={addEntry}
+            duplicateEntry={duplicateEntry}
+            deleteEntry={deleteEntry}
+            moveEntry={moveEntry}
+            goDashboard={() => setView("dashboard")}
+            goJD={() => setView("jd")}
+            setShowVersion={(value) => {
+              setVersionName(
+                view === "optimize"
+                  ? "Java 后端开发 · JD 定向版"
+                  : `${current.name} · 版本 ${current.version + 1}`,
+              );
+              setShowVersion(value);
+            }}
+            historyCount={(histories[current.id] ?? []).length}
+            showHistory={() => setShowHistory(true)}
+            notify={setToast}
+          />
+        )}
+
+        {view === "jd" && (
+          <JDPage
+            resumes={resumes}
+            currentId={currentId}
+            setCurrentId={setCurrentId}
+            jdText={jdText}
+            setJdText={setJdText}
+            analyzing={analyzing}
+            analysisReady={analysisReady}
+            analysis={jdAnalysis}
+            suggestionCount={suggestions.length}
+            suggestions={suggestions}
+            analyzeJD={analyzeJD}
+            analysisTab={analysisTab}
+            setAnalysisTab={setAnalysisTab}
+            goOptimize={() => setView("optimize")}
+          />
+        )}
+
+        {view === "optimize" && (
+          <OptimizePage
+            suggestions={suggestions}
+            target={current.basic.target || current.target || "目标岗位"}
+            selected={selectedSuggestion}
+            setSelected={setSelectedSuggestion}
+            updateSuggestion={updateSuggestion}
+            save={() => {
+              setVersionName(`${current.name} · JD 定向版`);
+              setShowVersion(true);
+            }}
+            back={() => setView("jd")}
+          />
+        )}
+      </section>
+
+      <input
+        ref={fileRef}
+        className="visually-hidden"
+        type="file"
+        accept=".pdf,.docx,.txt,image/png,image/jpeg"
+        onChange={handleImport}
+      />
+      {showNew && (
+        <Modal title="创建一份新简历" onClose={() => setShowNew(false)}>
+          <label className="field">
+            <span>简历名称</span>
+            <input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <div className="choice-grid">
+            <button className="choice-card selected">
+              <span className="choice-icon">＋</span>
+              <strong>空白简历</strong>
+              <small>从模块化表单开始填写</small>
+            </button>
+            <button
+              className="choice-card"
+              onClick={() => fileRef.current?.click()}
+            >
+              <span className="choice-icon">导</span>
+              <strong>导入旧简历</strong>
+              <small>支持 PDF、Word 与图片</small>
+            </button>
+          </div>
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setShowNew(false)}>
+              取消
+            </button>
+            <button className="btn primary" onClick={createResume}>
+              创建并编辑
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showImport && (
+        <Modal title="导入旧简历" onClose={() => setShowImport(false)}>
+          <div className="parse-summary">
+            <span className="success-icon">{parsedImport ? "✓" : "…"}</span>
+            <div>
+              <strong>{importFileName}</strong>
+              <p>{importStatus}</p>
+            </div>
+          </div>
+          {!parsedImport && importProgress > 0 && (
+            <div className="import-progress">
+              <i><b style={{ width: `${importProgress}%` }} /></i>
+              <span>{importProgress}%</span>
+            </div>
+          )}
+          {parsedImport && (
+            <>
+              <div className="parse-tags">
+                {[
+                  ["基本信息", Boolean(parsedImport.name || parsedImport.email || parsedImport.phone)],
+                  ["教育经历", Boolean(parsedImport.education)],
+                  ["实习经历", Boolean(parsedImport.experience)],
+                  ["项目经历", Boolean(parsedImport.project)],
+                  ["技能", Boolean(parsedImport.skills)],
+                  ["证书", Boolean(parsedImport.certificate)],
+                  ["作品链接", Boolean(parsedImport.portfolio)],
+                ].map(([tag, found]) => (
+                  <span className={found ? "" : "missing"} key={String(tag)}>
+                    {found ? "✓" : "—"} {tag}
+                  </span>
+                ))}
+              </div>
+              <details className="import-text-preview">
+                <summary>查看提取到的原始文字</summary>
+                <pre>{parsedImport.rawText}</pre>
+              </details>
+              <details className="import-mapping" open>
+                <summary>校对字段映射（推荐）</summary>
+                <div className="import-basic-grid">
+                  {([
+                    ["name", "姓名"],
+                    ["email", "邮箱"],
+                    ["phone", "手机号"],
+                    ["city", "所在城市"],
+                  ] as [keyof ParsedResumeText, string][]).map(([field, label]) => (
+                    <label className="field" key={field}>
+                      <span>{label}</span>
+                      <input
+                        value={parsedImport[field]}
+                        onChange={(event) =>
+                          updateParsedImport(field, event.target.value)
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                {([
+                  ["summary", "个人简介"],
+                  ["education", "教育经历"],
+                  ["experience", "实习 / 工作经历"],
+                  ["project", "项目经历"],
+                  ["skills", "技能特长"],
+                  ["certificate", "证书荣誉"],
+                  ["evaluation", "自我评价"],
+                  ["portfolio", "作品链接"],
+                ] as [keyof ParsedResumeText, string][]).map(([field, label]) => (
+                  <label className="field" key={field}>
+                    <span>{label}</span>
+                    <textarea
+                      rows={field === "experience" || field === "project" ? 5 : 3}
+                      value={parsedImport[field]}
+                      onChange={(event) =>
+                        updateParsedImport(field, event.target.value)
+                      }
+                      placeholder={`未识别到${label}时，可从上方原始文字复制到这里`}
+                    />
+                  </label>
+                ))}
+              </details>
+            </>
+          )}
+          <p className="modal-note">
+            文件只在当前浏览器中解析。双栏、表格和扫描件仍可能出现错序，请先校对字段映射再导入。
+          </p>
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setShowImport(false)}>
+              返回
+            </button>
+            <button className="btn primary" onClick={confirmImport} disabled={!parsedImport}>
+              导入并校对
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showVersion && (
+        <Modal
+          title={view === "optimize" ? "保存为 JD 定向版本" : "创建版本快照"}
+          onClose={() => setShowVersion(false)}
+        >
+          <label className="field">
+            <span>版本名称</span>
+            <input
+              value={versionName}
+              onChange={(event) => setVersionName(event.target.value)}
+            />
+          </label>
+          <div className="version-note">
+            <span>原版本将完整保留</span>
+            <p>新版本会记录本次修改，之后仍可选择任一历史版本进行匹配。</p>
+          </div>
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setShowVersion(false)}>
+              取消
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                if (view === "optimize") {
+                  saveOptimizedVersion();
+                } else {
+                  saveSnapshot(versionName);
+                  setToast("版本快照已创建");
+                }
+              }}
+            >
+              保存新版本
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showHistory && current && (
+        <Modal title="历史版本" onClose={() => setShowHistory(false)}>
+          <div className="history-head">
+            <div>
+              <strong>{current.name}</strong>
+              <span>当前 V{current.version}</span>
+            </div>
+            <button
+              className="btn secondary small"
+              onClick={() => {
+                setShowHistory(false);
+                setVersionName(`${current.name} · 版本 ${current.version + 1}`);
+                setShowVersion(true);
+              }}
+            >
+              ＋ 保存当前版本
+            </button>
+          </div>
+          <div className="history-list">
+            {(histories[current.id] ?? []).length ? (
+              (histories[current.id] ?? []).map((snapshot) => (
+                <article key={snapshot.id}>
+                  <div>
+                    <strong>{snapshot.label}</strong>
+                    <span>
+                      V{snapshot.resume.version} · {snapshot.createdAt}
+                    </span>
+                  </div>
+                  <button onClick={() => restoreSnapshot(snapshot)}>恢复此版本</button>
+                </article>
+              ))
+            ) : (
+              <div className="history-empty">
+                <span>暂无历史快照</span>
+                <p>保存版本后，可在这里查看并恢复完整内容。</p>
+              </div>
+            )}
+          </div>
+          <p className="modal-note">恢复前会自动备份当前内容，不会覆盖或删除已有快照。</p>
+        </Modal>
+      )}
+
+      {toast && <div className="toast">✓ {toast}</div>}
+    </main>
+  );
+}
+
+function AuthPage({
+  mode,
+  setMode,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  passwordConfirm,
+  setPasswordConfirm,
+  loading,
+  message,
+  submit,
+}: {
+  mode: "login" | "register";
+  setMode: (value: "login" | "register") => void;
+  email: string;
+  setEmail: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  passwordConfirm: string;
+  setPasswordConfirm: (value: string) => void;
+  loading: boolean;
+  message: string;
+  submit: () => void;
+}) {
+  return (
+    <main className="auth-page">
+      <section className="auth-brand-panel">
+        <div className="auth-brand">
+          <span>知</span>
+          <strong>知途</strong>
+        </div>
+        <div>
+          <p className="eyebrow">校招简历助手</p>
+          <h1>把每一次修改，都变成可找回的求职资产。</h1>
+          <p>云端保存简历与历史版本，文件解析在浏览器中完成，不接入 AI。</p>
+        </div>
+        <ul>
+          <li>真实 PDF、DOCX 与图片文字解析</li>
+          <li>A4 实时预览与 PDF、PNG 导出</li>
+          <li>岗位关键词本地规则匹配</li>
+        </ul>
+      </section>
+      <section className="auth-card-wrap">
+        <form
+          className="auth-card"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
+          }}
+        >
+          <span className="auth-mark">知</span>
+          <div className="auth-tabs" role="tablist" aria-label="账号操作">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "login"}
+              className={mode === "login" ? "active" : ""}
+              onClick={() => setMode("login")}
+            >
+              登录
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "register"}
+              className={mode === "register" ? "active" : ""}
+              onClick={() => setMode("register")}
+            >
+              注册
+            </button>
+          </div>
+          <h2>{mode === "login" ? "欢迎回来" : "创建账号"}</h2>
+          <p>
+            {mode === "login"
+              ? "使用邮箱和密码登录，继续编辑你的云端简历。"
+              : "注册后即可保存简历与历史版本，无需打开邮件链接。"}
+          </p>
+          <label>
+            <span>邮箱地址</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@example.com"
+              autoComplete="email"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span>密码</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="至少 8 位字符"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={8}
+            />
+          </label>
+          {mode === "register" && (
+            <label>
+              <span>确认密码</span>
+              <input
+                type="password"
+                value={passwordConfirm}
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+                placeholder="再次输入密码"
+                autoComplete="new-password"
+                minLength={8}
+              />
+            </label>
+          )}
+          <button className="btn primary" type="submit" disabled={loading}>
+            {loading
+              ? mode === "login"
+                ? "正在登录…"
+                : "正在注册…"
+              : mode === "login"
+                ? "登录"
+                : "注册并进入"}
+          </button>
+          {message && <div className="auth-message">{message}</div>}
+          <small>账号仅用于隔离和保存你的数据；简历正文不会被发送给 AI 服务。</small>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function Dashboard({
+  resumes,
+  openResume,
+  duplicateResume,
+  deleteResume,
+  openHistory,
+  setShowNew,
+  triggerImport,
+  goJD,
+}: {
+  resumes: Resume[];
+  openResume: (id: string) => void;
+  duplicateResume: (resume: Resume) => void;
+  deleteResume: (resume: Resume) => void;
+  openHistory: (id: string) => void;
+  setShowNew: (value: boolean) => void;
+  triggerImport: () => void;
+  goJD: () => void;
+}) {
+  const displayName =
+    resumes
+      .map((resume) => resume.basic.name.trim())
+      .find(Boolean) || "求职同学";
+
+  return (
+    <div className="page dashboard-page">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">工作台</p>
+          <h1>你好，{displayName}</h1>
+          <p>先把真实经历说清楚，再让每份简历更贴近目标岗位。</p>
+        </div>
+        <div className="header-actions">
+          <button className="btn secondary" onClick={triggerImport}>
+            导入旧简历
+          </button>
+          <button className="btn primary" onClick={() => setShowNew(true)}>
+            ＋ 新建简历
+          </button>
+        </div>
+      </header>
+
+      <section className="journey-banner">
+        <div className="journey-copy">
+          <span className="ai-pill">本地求职工作流</span>
+          <h2>从一份真实简历，走到一场有准备的面试</h2>
+          <p>选择简历版本，解析目标 JD，再逐条确认优化建议。</p>
+        </div>
+        <div className="journey-steps">
+          {[
+            ["01", "完善简历"],
+            ["02", "匹配岗位"],
+            ["03", "确认优化"],
+            ["04", "准备面试"],
+          ].map(([number, label], index) => (
+            <div className={index < 1 ? "journey-step done" : "journey-step"} key={number}>
+              <span>{number}</span>
+              <strong>{label}</strong>
+            </div>
+          ))}
+        </div>
+        <button className="banner-action" onClick={goJD}>
+          开始 JD 匹配 →
+        </button>
+      </section>
+
+      <div className="section-heading">
+        <div>
+          <h2>我的简历</h2>
+          <span>{resumes.length} 份简历 · 自动保存于本机</span>
+        </div>
+        <button className="text-button" onClick={() => setShowNew(true)}>
+          ＋ 新建
+        </button>
+      </div>
+
+      <div className="resume-grid">
+        {resumes.map((resume, index) => (
+          <article className="resume-card" key={resume.id}>
+            <button
+              className="resume-thumb"
+              onClick={() => openResume(resume.id)}
+              aria-label={`编辑 ${resume.name}`}
+            >
+              <span className="thumb-label">{index === 0 ? "主投" : "备选"}</span>
+              <div className="mini-resume">
+                <strong>{resume.basic.name || "你的姓名"}</strong>
+                <small>{resume.basic.target || "求职目标"}</small>
+                <i />
+                <b>教育经历</b>
+                <em />
+                <em />
+                <b>项目经历</b>
+                <em />
+                <em className="short" />
+              </div>
+            </button>
+            <div className="resume-card-body">
+              <div className="card-title-row">
+                <div>
+                  <h3>{resume.name}</h3>
+                  <p>{resume.target}</p>
+                </div>
+                <span className="version-chip">V{resume.version}</span>
+              </div>
+              <div className="progress-row">
+                <div>
+                  <span style={{ width: `${resume.completion}%` }} />
+                </div>
+                <strong>{resume.completion}% 完整</strong>
+              </div>
+              <div className="card-meta">
+                <span>最近编辑 {resume.updated}</span>
+                <div>
+                  <button onClick={() => openHistory(resume.id)}>历史</button>
+                  <button onClick={() => duplicateResume(resume)}>复制</button>
+                  <button onClick={() => deleteResume(resume)}>删除</button>
+                  <button className="edit-link" onClick={() => openResume(resume.id)}>
+                    继续编辑
+                  </button>
+                </div>
+              </div>
+            </div>
+          </article>
+        ))}
+        <button className="new-resume-card" onClick={() => setShowNew(true)}>
+          <span>＋</span>
+          <strong>创建另一份定向简历</strong>
+          <small>针对不同岗位调整内容重点</small>
+        </button>
+      </div>
+
+      <div className="dashboard-lower">
+        <section className="activity-panel">
+          <div className="section-heading compact">
+            <div>
+              <h2>最近动态</h2>
+              <span>你的简历变化都可追溯</span>
+            </div>
+          </div>
+          {[
+            ["刚刚", "自动保存了 Java 后端开发校招简历", "保存"],
+            ["昨天 18:42", "创建了产品经理实习简历 · V2", "版本"],
+            ["7月26日", "完成腾讯云后端开发实习生 JD 分析", "匹配"],
+          ].map(([time, text, tag]) => (
+            <div className="activity-row" key={text}>
+              <span className="activity-dot" />
+              <div>
+                <strong>{text}</strong>
+                <small>{time}</small>
+              </div>
+              <em>{tag}</em>
+            </div>
+          ))}
+        </section>
+
+        <aside className="next-panel">
+          <span className="panel-kicker">推荐下一步</span>
+          <h3>用目标岗位检验这份简历</h3>
+          <p>当前简历已具备完整项目经历，可以开始匹配。</p>
+          <div className="next-score">
+            <strong>88%</strong>
+            <span>简历完整度</span>
+          </div>
+          <button className="btn dark" onClick={goJD}>
+            分析目标 JD
+          </button>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Editor({
+  resume,
+  activeModule,
+  setActiveModule,
+  template,
+  setTemplate,
+  saveStatus,
+  updateCurrent,
+  updateNested,
+  moveModule,
+  hideModule,
+  restoreModule,
+  updateEntry,
+  addEntry,
+  duplicateEntry,
+  deleteEntry,
+  moveEntry,
+  goDashboard,
+  goJD,
+  setShowVersion,
+  historyCount,
+  showHistory,
+  notify,
+}: {
+  resume: Resume;
+  activeModule: ModuleKey;
+  setActiveModule: (key: ModuleKey) => void;
+  template: Template;
+  setTemplate: (value: Template) => void;
+  saveStatus: string;
+  updateCurrent: (patch: Partial<Resume>) => void;
+  updateNested: (
+    key: "basic",
+    field: string,
+    value: string,
+  ) => void;
+  moveModule: (key: ModuleKey, direction: -1 | 1) => void;
+  hideModule: (key: ModuleKey) => void;
+  restoreModule: (key: ModuleKey) => void;
+  updateEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    patch: Record<string, string>,
+  ) => void;
+  addEntry: (collection: "experiences" | "educations" | "projects") => void;
+  duplicateEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => void;
+  deleteEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => void;
+  moveEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    direction: -1 | 1,
+  ) => void;
+  goDashboard: () => void;
+  goJD: () => void;
+  setShowVersion: (value: boolean) => void;
+  historyCount: number;
+  showHistory: () => void;
+  notify: (message: string) => void;
+}) {
+  const [smartOnePage, setSmartOnePage] = useState(true);
+  const [fitsOnePage, setFitsOnePage] = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
+  const paperRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const paper = paperRef.current;
+      if (paper) {
+        setFitsOnePage(paper.scrollHeight <= paper.clientHeight + 2);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resume, template, smartOnePage]);
+
+  const safeFilename =
+    resume.name.replace(/[<>:"/\\|?*]/g, "-").trim() || "我的简历";
+
+  const renderResumeCanvas = async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1240;
+    canvas.height = 1754;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas is unavailable");
+    const avatarImage = resume.basic.avatar
+      ? await new Promise<HTMLImageElement | null>((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => resolve(null);
+          image.src = resume.basic.avatar;
+        })
+      : null;
+
+    const scale = canvas.width / 610;
+    const px = (value: number) => value * scale;
+    const accent =
+      template === "azure" ? "#315e88" : template === "sidebar" ? "#225e45" : "#1e2722";
+    const smart = smartOnePage;
+    const sideWidth = template === "sidebar" ? px(smart ? 130 : 141) : 0;
+    const contentX =
+      template === "sidebar" ? px(smart ? 158 : 171) : px(smart ? 37 : 43);
+    const rightPadding = px(smart ? 37 : 43);
+    const contentWidth = canvas.width - contentX - rightPadding;
+    let y = px(smart ? 31 : 38);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.textBaseline = "top";
+    if (template === "sidebar") {
+      context.fillStyle = "#1b4334";
+      context.fillRect(0, 0, sideWidth, canvas.height);
+    }
+
+    const setFont = (size: number, weight = 400) => {
+      context.font = `${weight} ${size}px Arial, "Microsoft YaHei", "PingFang SC", sans-serif`;
+    };
+    const drawWrapped = (
+      value: string,
+      size: number,
+      weight: number,
+      color: string,
+      lineHeight: number,
+      x = contentX,
+      maxWidth = contentWidth,
+    ) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+      const paragraphs = value.split(/\r?\n/);
+      paragraphs.forEach((paragraph) => {
+        if (!paragraph) {
+          y += lineHeight;
+          return;
+        }
+        let line = "";
+        Array.from(paragraph).forEach((character) => {
+          const test = line + character;
+          if (line && context.measureText(test).width > maxWidth) {
+            context.fillText(line, x, y);
+            y += lineHeight;
+            line = character;
+          } else {
+            line = test;
+          }
+        });
+        if (line) {
+          context.fillText(line, x, y);
+          y += lineHeight;
+        }
+      });
+    };
+    const countWrappedLines = (value: string, maxWidth: number) => {
+      let count = 0;
+      value.split(/\r?\n/).forEach((paragraph) => {
+        if (!paragraph) {
+          count += 1;
+          return;
+        }
+        let line = "";
+        Array.from(paragraph).forEach((character) => {
+          const test = line + character;
+          if (line && context.measureText(test).width > maxWidth) {
+            count += 1;
+            line = character;
+          } else {
+            line = test;
+          }
+        });
+        if (line) count += 1;
+      });
+      return Math.max(1, count);
+    };
+    const drawSectionHeading = (heading: string) => {
+      y += px(smart ? 8 : 11);
+      setFont(px(smart ? 9 : 10), 700);
+      context.fillStyle = accent;
+      context.fillText(heading, contentX, y);
+      y += px(smart ? 19 : 22);
+      context.fillStyle = accent;
+      context.fillRect(contentX, y - px(3), contentWidth, template === "azure" ? 3 : 2);
+    };
+    const drawEntry = (
+      title: string,
+      subtitle: string,
+      period: string,
+      description: string,
+    ) => {
+      setFont(px(smart ? 7.8 : 8.3), 700);
+      context.fillStyle = "#161916";
+      context.fillText(title || "待填写", contentX, y);
+      setFont(px(7), 400);
+      const periodWidth = context.measureText(period).width;
+      context.fillText(period, contentX + contentWidth - periodWidth, y);
+      y += px(13);
+      if (subtitle) {
+        drawWrapped(
+          subtitle,
+          px(smart ? 7 : 7.4),
+          700,
+          "#161916",
+          px(11),
+        );
+      }
+      if (description) {
+        y += px(1);
+        drawWrapped(
+          description,
+          px(smart ? 7 : 7.5),
+          400,
+          "#252b27",
+          px(smart ? 10.4 : 12),
+        );
+      }
+      y += px(3);
+    };
+
+    if (template === "azure") {
+      const headerHeight = px(smart ? 111 : 118);
+      context.fillStyle = "#1d3554";
+      context.fillRect(0, 0, canvas.width, headerHeight);
+      y = px(smart ? 25 : 30);
+    }
+    setFont(px(smart ? 21 : 23), 500);
+    context.fillStyle = template === "azure" ? "#ffffff" : "#161916";
+    context.fillText(resume.basic.name || "你的姓名", contentX, y);
+    y += px(smart ? 31 : 34);
+    drawWrapped(
+      resume.basic.target || resume.target,
+      px(10),
+      700,
+      template === "azure" ? "#d4e0ec" : "#39594a",
+      px(16),
+    );
+    if (template !== "sidebar") {
+      y += px(1);
+      drawWrapped(
+        [resume.basic.phone, resume.basic.email, resume.basic.city]
+          .filter(Boolean)
+          .join("  |  "),
+        px(7.5),
+        400,
+        template === "azure" ? "#d4e0ec" : "#545d58",
+        px(13),
+      );
+    } else {
+      let sideY = px(130);
+      setFont(px(7.2), 400);
+      context.fillStyle = "#e0eee7";
+      [resume.basic.phone, resume.basic.email, resume.basic.city]
+        .filter(Boolean)
+        .forEach((line) => {
+          context.fillText(line, px(13), sideY);
+          sideY += px(17);
+        });
+    }
+    const avatarX =
+      template === "sidebar"
+        ? px(30)
+        : canvas.width - rightPadding - px(53);
+    const avatarY = template === "azure" ? px(smart ? 25 : 30) : px(smart ? 31 : 38);
+    const avatarWidth = px(template === "sidebar" ? 70 : 53);
+    const avatarHeight = px(template === "sidebar" ? 70 : 63);
+    context.fillStyle = "#e8d3c2";
+    context.fillRect(avatarX, avatarY, avatarWidth, avatarHeight);
+    if (avatarImage) {
+      context.save();
+      if (template === "sidebar") {
+        context.beginPath();
+        context.ellipse(
+          avatarX + avatarWidth / 2,
+          avatarY + avatarHeight / 2,
+          avatarWidth / 2,
+          avatarHeight / 2,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        context.clip();
+      }
+      const sourceRatio = avatarImage.naturalWidth / avatarImage.naturalHeight;
+      const targetRatio = avatarWidth / avatarHeight;
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceWidth = avatarImage.naturalWidth;
+      let sourceHeight = avatarImage.naturalHeight;
+      if (sourceRatio > targetRatio) {
+        sourceWidth = avatarImage.naturalHeight * targetRatio;
+        sourceX = (avatarImage.naturalWidth - sourceWidth) / 2;
+      } else {
+        sourceHeight = avatarImage.naturalWidth / targetRatio;
+        sourceY = (avatarImage.naturalHeight - sourceHeight) / 2;
+      }
+      context.drawImage(
+        avatarImage,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        avatarX,
+        avatarY,
+        avatarWidth,
+        avatarHeight,
+      );
+      context.restore();
+    } else {
+      setFont(px(20), 700);
+      context.fillStyle = "#714d39";
+      const avatarText = resume.basic.name?.slice(0, 1) || "你";
+      const avatarTextWidth = context.measureText(avatarText).width;
+      context.fillText(
+        avatarText,
+        avatarX + (avatarWidth - avatarTextWidth) / 2,
+        avatarY + (avatarHeight - px(20)) / 2,
+      );
+    }
+    if (template === "azure") y = px(smart ? 127 : 132);
+    else y += px(smart ? 6 : 8);
+    if (resume.basic.summary.trim()) {
+      const summaryStart = y;
+      const summaryFont = px(smart ? 7 : 7.5);
+      const summaryLineHeight = px(smart ? 10.2 : 11.6);
+      const summaryTextWidth = contentWidth - px(18);
+      setFont(summaryFont, 400);
+      const summaryLines = countWrappedLines(
+        resume.basic.summary,
+        summaryTextWidth,
+      );
+      const summaryHeight = px(11) + summaryLines * summaryLineHeight;
+      context.fillStyle = template === "azure" ? "#f3f7fb" : "#f1f6f3";
+      context.fillRect(contentX, summaryStart, contentWidth, summaryHeight);
+      context.fillStyle = template === "azure" ? "#557fad" : template === "sidebar" ? "#d2e987" : "#1e684c";
+      context.fillRect(contentX, summaryStart, px(3), summaryHeight);
+      y = summaryStart + px(6);
+      drawWrapped(
+        resume.basic.summary,
+        summaryFont,
+        400,
+        "#48534d",
+        summaryLineHeight,
+        contentX + px(9),
+        summaryTextWidth,
+      );
+      y += px(5);
+    }
+    if (!resume.hiddenModules.includes("experience")) {
+      drawSectionHeading("实习经历");
+      resume.experiences.forEach((item) =>
+        drawEntry(item.company, item.role, item.period, item.description),
+      );
+    }
+    if (!resume.hiddenModules.includes("education")) {
+      drawSectionHeading("教育经历");
+      resume.educations.forEach((item) =>
+        drawEntry(
+          item.school,
+          `${item.major} · ${item.degree}`,
+          item.period,
+          item.detail,
+        ),
+      );
+    }
+    if (!resume.hiddenModules.includes("project")) {
+      drawSectionHeading("项目经历");
+      resume.projects.forEach((item) =>
+        drawEntry(
+          item.name,
+          `${item.role} · ${item.stack}`,
+          item.period,
+          item.description,
+        ),
+      );
+    }
+    const simple: [ModuleKey, string, string][] = [
+      ["skills", "技能特长", resume.skills],
+      ["certificate", "证书荣誉", resume.certificate],
+      ["evaluation", "自我评价", resume.evaluation],
+      ["portfolio", "作品展示", resume.portfolio],
+    ];
+    simple.forEach(([key, heading, text]) => {
+      if (resume.hiddenModules.includes(key)) return;
+      drawSectionHeading(heading);
+      y += px(3);
+      drawWrapped(
+        text || "暂未填写",
+        px(smart ? 7 : 7.5),
+        400,
+        "#252b27",
+        px(smart ? 10.4 : 12),
+      );
+    });
+    return canvas;
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1200);
+  };
+
+  const exportPDF = async () => {
+    setExportOpen(false);
+    document.body.classList.add("printing-resume");
+    const cleanup = () => document.body.classList.remove("printing-resume");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(cleanup, 800);
+    }, 80);
+    notify("请在打印窗口选择“另存为 PDF”");
+  };
+
+  const exportPNG = async () => {
+    setExportOpen(false);
+    notify("正在生成 A4 PNG…");
+    try {
+      const canvas = await renderResumeCanvas();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (value) =>
+            value ? resolve(value) : reject(new Error("PNG encoding failed")),
+          "image/png",
+        );
+      });
+      downloadBlob(blob, `${safeFilename}-A4.png`);
+      notify("A4 PNG 已下载");
+    } catch {
+      notify("PNG 生成失败，请重试");
+    }
+  };
+
+  return (
+    <div className="editor-page">
+      <header className="editor-topbar">
+        <div className="editor-title">
+          <button onClick={goDashboard} aria-label="返回简历中心">←</button>
+          <div>
+            <input
+              value={resume.name}
+              onChange={(event) => updateCurrent({ name: event.target.value })}
+              aria-label="简历名称"
+            />
+            <span><i /> {saveStatus}</span>
+          </div>
+        </div>
+        <div className="editor-actions">
+          <button
+            className={smartOnePage ? "one-page-toggle active" : "one-page-toggle"}
+            onClick={() => setSmartOnePage((value) => !value)}
+            aria-pressed={smartOnePage}
+            title="自动调整页边距、字号和模块间距，优先保持一页"
+          >
+            <span>{smartOnePage ? "✓" : "1"}</span>
+            智能一页
+          </button>
+          <div className="template-switch">
+            <span>模板</span>
+            <button
+              className={template === "classic" ? "active" : ""}
+              onClick={() => setTemplate("classic")}
+            >
+              经典
+            </button>
+            <button
+              className={template === "azure" ? "active" : ""}
+              onClick={() => setTemplate("azure")}
+            >
+              靛蓝
+            </button>
+            <button
+              className={template === "sidebar" ? "active" : ""}
+              onClick={() => setTemplate("sidebar")}
+            >
+              侧栏
+            </button>
+          </div>
+          <button className="btn secondary small" onClick={() => setShowVersion(true)}>
+            保存版本
+          </button>
+          <button className="btn secondary small history-button" onClick={showHistory}>
+            历史 {historyCount > 0 ? `(${historyCount})` : ""}
+          </button>
+          <div className="export-control">
+            <button
+              className="btn export-button small"
+              onClick={() => setExportOpen((value) => !value)}
+              aria-expanded={exportOpen}
+            >
+              导出简历⌄
+            </button>
+            {exportOpen && (
+              <div className="export-menu">
+                <button onClick={exportPDF}>
+                  <span>PDF</span>
+                  <div>
+                    <strong>普通 A4 PDF</strong>
+                    <small>原生打印 · 与预览一致</small>
+                  </div>
+                </button>
+                <button onClick={exportPNG}>
+                  <span>PNG</span>
+                  <div>
+                    <strong>导出 PNG</strong>
+                    <small>与右侧预览一致 · A4</small>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="btn primary small" onClick={goJD}>JD 本地匹配</button>
+        </div>
+      </header>
+
+      <div className="editor-workspace">
+        <aside className="module-sidebar">
+          <div className="module-sidebar-title">
+            <div>
+              <strong>简历模块</strong>
+              <small>拖动思路 · 调整顺序</small>
+            </div>
+            <span>{resume.moduleOrder.length - resume.hiddenModules.length}</span>
+          </div>
+          <div className="module-list">
+            {resume.moduleOrder
+              .filter((key) => !resume.hiddenModules.includes(key))
+              .map((key, index) => (
+                <button
+                  className={activeModule === key ? "module-item active" : "module-item"}
+                  key={key}
+                  onClick={() => setActiveModule(key)}
+                >
+                  <span className="module-icon">{moduleMeta[key].icon}</span>
+                  <strong>{moduleMeta[key].label}</strong>
+                  <span className="module-order">
+                    <i
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        moveModule(key, -1);
+                      }}
+                      aria-label="上移"
+                    >
+                      ↑
+                    </i>
+                    <i
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        moveModule(key, 1);
+                      }}
+                      aria-label="下移"
+                    >
+                      ↓
+                    </i>
+                  </span>
+                  <em>{index < 5 ? "✓" : ""}</em>
+                </button>
+              ))}
+          </div>
+          {resume.hiddenModules.length > 0 && (
+            <div className="hidden-modules">
+              <small>已隐藏模块</small>
+              {resume.hiddenModules.map((key) => (
+                <button key={key} onClick={() => restoreModule(key)}>
+                  ＋ {moduleMeta[key].label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            className="add-module-button"
+            onClick={() => {
+              const key = resume.hiddenModules[0];
+              if (key) restoreModule(key);
+            }}
+          >
+            ＋ 添加简历模块
+          </button>
+          <div className="completion-card">
+            <div>
+              <strong>{resume.completion}%</strong>
+              <span>完整度</span>
+            </div>
+            <p>再完善 2 项信息即可开始投递</p>
+          </div>
+        </aside>
+
+        <section className="form-panel">
+          <div className="form-panel-header">
+            <div>
+              <p className="eyebrow">正在编辑</p>
+              <h2>{moduleMeta[activeModule].label}</h2>
+              <span>填写真实信息，右侧将实时更新</span>
+            </div>
+            {activeModule !== "basic" && (
+              <button
+                className="danger-link"
+                onClick={() => hideModule(activeModule)}
+              >
+                隐藏模块
+              </button>
+            )}
+          </div>
+
+          <ModuleForm
+            resume={resume}
+            activeModule={activeModule}
+            updateCurrent={updateCurrent}
+            updateNested={updateNested}
+            updateEntry={updateEntry}
+            addEntry={addEntry}
+            duplicateEntry={duplicateEntry}
+            deleteEntry={deleteEntry}
+            moveEntry={moveEntry}
+          />
+        </section>
+
+        <section className="preview-panel">
+          <div className="preview-toolbar">
+            <div>
+              <span className="live-dot" />
+              实时预览
+              <span className="a4-badge">A4 · 210 × 297 mm</span>
+            </div>
+            <div>
+              <button>−</button>
+              <span>82%</span>
+              <button>＋</button>
+              <button className="fit-button">适应宽度</button>
+            </div>
+          </div>
+          <div className="paper-stage">
+            <ResumePreview
+              resume={resume}
+              template={template}
+              paperRef={paperRef}
+              smartOnePage={smartOnePage}
+              ultraCompact={smartOnePage && !fitsOnePage}
+            />
+            <div className="paper-status">
+              <span>第 1 页 / 共 1 页</span>
+              <span>
+                {smartOnePage
+                  ? fitsOnePage
+                    ? "✓ 智能一页适配完成"
+                    : "正在进一步压缩排版"
+                  : "A4 标准排版"}
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ModuleForm({
+  resume,
+  activeModule,
+  updateCurrent,
+  updateNested,
+  updateEntry,
+  addEntry,
+  duplicateEntry,
+  deleteEntry,
+  moveEntry,
+}: {
+  resume: Resume;
+  activeModule: ModuleKey;
+  updateCurrent: (patch: Partial<Resume>) => void;
+  updateNested: (
+    key: "basic",
+    field: string,
+    value: string,
+  ) => void;
+  updateEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    patch: Record<string, string>,
+  ) => void;
+  addEntry: (collection: "experiences" | "educations" | "projects") => void;
+  duplicateEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => void;
+  deleteEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+  ) => void;
+  moveEntry: (
+    collection: "experiences" | "educations" | "projects",
+    id: string,
+    direction: -1 | 1,
+  ) => void;
+}) {
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarError, setAvatarError] = useState("");
+
+  const selectAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setAvatarError("请选择 JPG、PNG 或 WebP 图片");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarError("图片不能超过 10 MB");
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      const outputWidth = 420;
+      const outputHeight = 500;
+      const scale = Math.max(
+        outputWidth / bitmap.width,
+        outputHeight / bitmap.height,
+      );
+      const sourceWidth = outputWidth / scale;
+      const sourceHeight = outputHeight / scale;
+      const sourceX = (bitmap.width - sourceWidth) / 2;
+      const sourceY = (bitmap.height - sourceHeight) / 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("无法处理图片");
+      context.drawImage(
+        bitmap,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        outputWidth,
+        outputHeight,
+      );
+      bitmap.close();
+      updateNested("basic", "avatar", canvas.toDataURL("image/jpeg", 0.88));
+      setAvatarError("");
+    } catch {
+      setAvatarError("头像处理失败，请换一张图片重试");
+    }
+  };
+
+  if (activeModule === "basic") {
+    return (
+      <div className="form-stack">
+        <div className="form-card">
+          <div className="form-grid two">
+            <Field label="姓名" value={resume.basic.name} onChange={(v) => updateNested("basic", "name", v)} />
+            <Field label="求职目标" value={resume.basic.target} onChange={(v) => updateNested("basic", "target", v)} />
+            <Field label="手机号" value={resume.basic.phone} onChange={(v) => updateNested("basic", "phone", v)} />
+            <Field label="邮箱" value={resume.basic.email} onChange={(v) => updateNested("basic", "email", v)} />
+            <Field label="所在城市" value={resume.basic.city} onChange={(v) => updateNested("basic", "city", v)} />
+            <label className="field">
+              <span>头像</span>
+              <input
+                ref={avatarInputRef}
+                className="avatar-file-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={selectAvatar}
+              />
+              <div className="avatar-actions">
+                <button
+                  type="button"
+                  className="upload-field"
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  <span className="avatar-thumb">
+                    {resume.basic.avatar ? (
+                      <img src={resume.basic.avatar} alt="" />
+                    ) : (
+                      resume.basic.name?.slice(0, 1) || "你"
+                    )}
+                  </span>
+                  <b>{resume.basic.avatar ? "更换头像" : "上传头像"}</b>
+                </button>
+                {resume.basic.avatar && (
+                  <button
+                    type="button"
+                    className="avatar-remove"
+                    onClick={() => updateNested("basic", "avatar", "")}
+                  >
+                    移除
+                  </button>
+                )}
+              </div>
+              {avatarError && <small className="field-error">{avatarError}</small>}
+            </label>
+          </div>
+          <TextField
+            label="个人简介"
+            value={resume.basic.summary}
+            onChange={(v) => updateNested("basic", "summary", v)}
+            hint="建议用 2–3 句话概括专业背景、核心能力和求职方向。"
+          />
+        </div>
+        <TruthNotice />
+      </div>
+    );
+  }
+
+  if (activeModule === "experience") {
+    return (
+      <div className="form-stack">
+        {resume.experiences.map((entry, index) => (
+          <div className="entry-block" key={entry.id}>
+            <EntryToolbar
+              label={`实习经历 ${String(index + 1).padStart(2, "0")}`}
+              index={index}
+              total={resume.experiences.length}
+              duplicate={() => duplicateEntry("experiences", entry.id)}
+              remove={() => deleteEntry("experiences", entry.id)}
+              move={(direction) => moveEntry("experiences", entry.id, direction)}
+            />
+            <div className="form-card">
+              <div className="form-grid two">
+                <Field label="公司名称" value={entry.company} onChange={(v) => updateEntry("experiences", entry.id, { company: v })} />
+                <Field label="职位" value={entry.role} onChange={(v) => updateEntry("experiences", entry.id, { role: v })} />
+                <Field label="时间" value={entry.period} onChange={(v) => updateEntry("experiences", entry.id, { period: v })} />
+              </div>
+              <TextField
+                label="职责与成果"
+                value={entry.description}
+                onChange={(v) => updateEntry("experiences", entry.id, { description: v })}
+                rows={6}
+              />
+              <SmartHint />
+            </div>
+          </div>
+        ))}
+        <button className="add-entry" onClick={() => addEntry("experiences")}>＋ 添加一段实习经历</button>
+        <TruthNotice />
+      </div>
+    );
+  }
+
+  if (activeModule === "education") {
+    return (
+      <div className="form-stack">
+        {resume.educations.map((entry, index) => (
+          <div className="entry-block" key={entry.id}>
+            <EntryToolbar
+              label={`教育经历 ${String(index + 1).padStart(2, "0")}`}
+              index={index}
+              total={resume.educations.length}
+              duplicate={() => duplicateEntry("educations", entry.id)}
+              remove={() => deleteEntry("educations", entry.id)}
+              move={(direction) => moveEntry("educations", entry.id, direction)}
+            />
+            <div className="form-card">
+              <div className="form-grid two">
+                <Field label="学校" value={entry.school} onChange={(v) => updateEntry("educations", entry.id, { school: v })} />
+                <Field label="专业" value={entry.major} onChange={(v) => updateEntry("educations", entry.id, { major: v })} />
+                <Field label="学历" value={entry.degree} onChange={(v) => updateEntry("educations", entry.id, { degree: v })} />
+                <Field label="时间" value={entry.period} onChange={(v) => updateEntry("educations", entry.id, { period: v })} />
+              </div>
+              <TextField label="成绩、排名与课程" value={entry.detail} onChange={(v) => updateEntry("educations", entry.id, { detail: v })} />
+            </div>
+          </div>
+        ))}
+        <button className="add-entry" onClick={() => addEntry("educations")}>＋ 添加教育经历</button>
+      </div>
+    );
+  }
+
+  if (activeModule === "project") {
+    return (
+      <div className="form-stack">
+        {resume.projects.map((entry, index) => (
+          <div className="entry-block" key={entry.id}>
+            <EntryToolbar
+              label={`项目经历 ${String(index + 1).padStart(2, "0")}`}
+              index={index}
+              total={resume.projects.length}
+              duplicate={() => duplicateEntry("projects", entry.id)}
+              remove={() => deleteEntry("projects", entry.id)}
+              move={(direction) => moveEntry("projects", entry.id, direction)}
+            />
+            <div className="form-card">
+              <div className="form-grid two">
+                <Field label="项目名称" value={entry.name} onChange={(v) => updateEntry("projects", entry.id, { name: v })} />
+                <Field label="个人角色" value={entry.role} onChange={(v) => updateEntry("projects", entry.id, { role: v })} />
+                <Field label="项目时间" value={entry.period} onChange={(v) => updateEntry("projects", entry.id, { period: v })} />
+                <Field label="技术栈" value={entry.stack} onChange={(v) => updateEntry("projects", entry.id, { stack: v })} />
+              </div>
+              <TextField label="项目背景、个人贡献与成果" value={entry.description} onChange={(v) => updateEntry("projects", entry.id, { description: v })} rows={6} />
+              <SmartHint project />
+            </div>
+          </div>
+        ))}
+        <button className="add-entry" onClick={() => addEntry("projects")}>＋ 添加项目经历</button>
+      </div>
+    );
+  }
+
+  const simpleMap: Record<
+    Exclude<ModuleKey, "basic" | "experience" | "education" | "project">,
+    { label: string; hint: string; field: keyof Resume }
+  > = {
+    skills: {
+      label: "技能名称与熟练程度",
+      hint: "只填写真实掌握的技能。可用“熟悉 / 了解”描述程度。",
+      field: "skills",
+    },
+    certificate: {
+      label: "证书与荣誉",
+      hint: "建议写明证书名称、颁发机构和获得时间。",
+      field: "certificate",
+    },
+    evaluation: {
+      label: "自我评价",
+      hint: "避免“吃苦耐劳”等空泛描述，优先写可被经历证明的特质。",
+      field: "evaluation",
+    },
+    portfolio: {
+      label: "作品名称与链接",
+      hint: "可添加 GitHub、个人网站、设计作品集或项目演示。",
+      field: "portfolio",
+    },
+  };
+  const config = simpleMap[activeModule as keyof typeof simpleMap];
+  return (
+    <div className="form-stack">
+      <div className="form-card">
+        <TextField
+          label={config.label}
+          value={String(resume[config.field])}
+          onChange={(value) => updateCurrent({ [config.field]: value })}
+          rows={6}
+          hint={config.hint}
+        />
+      </div>
+      <button className="add-entry">＋ 添加一项{moduleMeta[activeModule].label}</button>
+      <TruthNotice />
+    </div>
+  );
+}
+
+function EntryToolbar({
+  label,
+  index,
+  total,
+  duplicate,
+  remove,
+  move,
+}: {
+  label: string;
+  index: number;
+  total: number;
+  duplicate: () => void;
+  remove: () => void;
+  move: (direction: -1 | 1) => void;
+}) {
+  return (
+    <div className="entry-label">
+      <span>{label}</span>
+      <div>
+        <button onClick={() => move(-1)} disabled={index === 0} aria-label="上移">
+          ↑
+        </button>
+        <button onClick={() => move(1)} disabled={index === total - 1} aria-label="下移">
+          ↓
+        </button>
+        <button onClick={duplicate}>复制</button>
+        <button className="entry-delete" onClick={remove}>删除</button>
+      </div>
+    </div>
+  );
+}
+
+function ResumePreview({
+  resume,
+  template,
+  paperRef,
+  smartOnePage,
+  ultraCompact,
+}: {
+  resume: Resume;
+  template: Template;
+  paperRef: RefObject<HTMLElement | null>;
+  smartOnePage: boolean;
+  ultraCompact: boolean;
+}) {
+  const visible = useMemo(
+    () => resume.moduleOrder.filter((key) => !resume.hiddenModules.includes(key)),
+    [resume.moduleOrder, resume.hiddenModules],
+  );
+  return (
+    <article
+      ref={paperRef}
+      className={`resume-paper template-${template}${smartOnePage ? " smart-one-page" : ""}${ultraCompact ? " ultra-compact" : ""}`}
+    >
+      <header className="paper-header">
+        <div className="paper-identity">
+          <h1>{resume.basic.name || "你的姓名"}</h1>
+          <p>{resume.basic.target || "求职目标"}</p>
+          <div>
+            <span>{resume.basic.phone || "手机号"}</span>
+            <span>{resume.basic.email || "邮箱"}</span>
+            <span>{resume.basic.city || "城市"}</span>
+          </div>
+        </div>
+        <div className="paper-avatar">
+          {resume.basic.avatar ? (
+            <img src={resume.basic.avatar} alt={`${resume.basic.name || "用户"}的头像`} />
+          ) : (
+            resume.basic.name?.slice(0, 1) || "你"
+          )}
+        </div>
+      </header>
+      {resume.basic.summary && <p className="paper-summary">{resume.basic.summary}</p>}
+      <div className="paper-body">
+        {visible
+          .filter((key) => key !== "basic")
+          .map((key) => (
+            <section className={`paper-section section-${key}`} key={key}>
+              <h2>{moduleMeta[key].label}</h2>
+              {key === "experience" &&
+                resume.experiences.map((entry) => (
+                  <PaperEntry
+                    key={entry.id}
+                    title={entry.company}
+                    subtitle={entry.role}
+                    period={entry.period}
+                    text={entry.description}
+                  />
+                ))}
+              {key === "education" &&
+                resume.educations.map((entry) => (
+                  <PaperEntry
+                    key={entry.id}
+                    title={entry.school}
+                    subtitle={`${entry.major} · ${entry.degree}`}
+                    period={entry.period}
+                    text={entry.detail}
+                  />
+                ))}
+              {key === "project" &&
+                resume.projects.map((entry) => (
+                  <PaperEntry
+                    key={entry.id}
+                    title={entry.name}
+                    subtitle={`${entry.role} · ${entry.stack}`}
+                    period={entry.period}
+                    text={entry.description}
+                  />
+                ))}
+              {key === "skills" && <p>{resume.skills || "暂未填写"}</p>}
+              {key === "certificate" && <p>{resume.certificate || "暂未填写"}</p>}
+              {key === "evaluation" && <p>{resume.evaluation || "暂未填写"}</p>}
+              {key === "portfolio" && <p>{resume.portfolio || "暂未填写"}</p>}
+            </section>
+          ))}
+      </div>
+    </article>
+  );
+}
+
+function PaperEntry({
+  title,
+  subtitle,
+  period,
+  text,
+}: {
+  title: string;
+  subtitle: string;
+  period: string;
+  text: string;
+}) {
+  return (
+    <div className="paper-entry">
+      <div className="paper-entry-head">
+        <strong>{title || "待填写"}</strong>
+        <span>{period}</span>
+      </div>
+      <b>{subtitle}</b>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function JDPage({
+  resumes,
+  currentId,
+  setCurrentId,
+  jdText,
+  setJdText,
+  analyzing,
+  analysisReady,
+  analysis,
+  suggestionCount,
+  suggestions,
+  analyzeJD,
+  analysisTab,
+  setAnalysisTab,
+  goOptimize,
+}: {
+  resumes: Resume[];
+  currentId: string;
+  setCurrentId: (id: string) => void;
+  jdText: string;
+  setJdText: (value: string) => void;
+  analyzing: boolean;
+  analysisReady: boolean;
+  analysis: JDAnalysisResult | null;
+  suggestionCount: number;
+  suggestions: Suggestion[];
+  analyzeJD: () => void;
+  analysisTab: string;
+  setAnalysisTab: (value: string) => void;
+  goOptimize: () => void;
+}) {
+  const result = analysis ?? {
+    score: 0,
+    keywords: [],
+    matched: [],
+    missing: [],
+    questions: [],
+  };
+  return (
+    <div className="page jd-page">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">JD 本地规则匹配</p>
+          <h1>看懂岗位，再调整简历</h1>
+          <p>系统只引用简历中已有内容，未体现的能力会明确标记。</p>
+        </div>
+        {analysisReady && (
+          <button className="btn primary" onClick={goOptimize}>
+            进入优化对比 →
+          </button>
+        )}
+      </header>
+
+      <div className={analysisReady ? "jd-layout has-result" : "jd-layout"}>
+        <section className="jd-input-card">
+          <div className="input-card-head">
+            <div>
+              <span className="step-number">1</span>
+              <div>
+                <strong>选择匹配简历</strong>
+                <small>可使用默认或历史版本</small>
+              </div>
+            </div>
+            <span className="local-badge">本地规则处理</span>
+          </div>
+          <select
+            value={currentId}
+            onChange={(event) => setCurrentId(event.target.value)}
+            aria-label="选择简历"
+          >
+            {resumes.map((resume) => (
+              <option value={resume.id} key={resume.id}>
+                {resume.name} · V{resume.version}
+              </option>
+            ))}
+          </select>
+
+          <div className="input-card-head second">
+            <div>
+              <span className="step-number">2</span>
+              <div>
+                <strong>粘贴岗位 JD</strong>
+                <small>建议包含岗位职责与任职要求</small>
+              </div>
+            </div>
+            <span className="local-badge">请粘贴文字</span>
+          </div>
+          <textarea
+            className="jd-textarea"
+            value={jdText}
+            onChange={(event) => setJdText(event.target.value)}
+          />
+          <div className="textarea-meta">
+            <span>{jdText.length} 字 · 内容完整</span>
+            <button onClick={() => setJdText(jdSample)}>填入示例 JD</button>
+          </div>
+          <button className="analyze-button" onClick={analyzeJD} disabled={analyzing}>
+            {analyzing ? (
+              <>
+                <span className="spinner" /> 正在识别岗位重点…
+              </>
+            ) : (
+              "开始本地匹配"
+            )}
+          </button>
+          <p className="analysis-safety">不连接任何 AI 服务，不上传简历或 JD；建议仅基于已有文字和预设规则。</p>
+        </section>
+
+        {!analysisReady && !analyzing && (
+          <aside className="analysis-placeholder">
+            <div className="placeholder-visual">
+              <span>JD</span>
+              <i />
+              <b>简历</b>
+            </div>
+            <h2>分析结果将在这里展开</h2>
+            <p>你将获得岗位关键词、四维匹配评分、优化建议和面试问题。</p>
+            <div className="placeholder-list">
+              {["岗位要求结构化解析", "简历证据逐项对应", "5–8 个面试准备问题"].map(
+                (item) => (
+                  <span key={item}>✓ {item}</span>
+                ),
+              )}
+            </div>
+          </aside>
+        )}
+
+        {analyzing && (
+          <aside className="analysis-loading">
+            <span className="big-spinner" />
+            <h2>正在交叉比对简历与 JD</h2>
+            <div className="loading-steps">
+              <span className="done">✓ 提取岗位关键词</span>
+              <span>比对简历证据…</span>
+              <span>生成面试问题</span>
+            </div>
+          </aside>
+        )}
+
+        {analysisReady && (
+          <section className="analysis-result">
+            <div className="result-hero">
+              <div className="score-ring">
+                <strong>{result.score}</strong>
+                <span>匹配分</span>
+              </div>
+              <div className="score-summary">
+                <span className="good-badge">
+                  {result.score >= 75 ? "匹配度较高" : result.score >= 50 ? "具备部分基础" : "需要重点补充"}
+                </span>
+                <h2>已比对 {result.keywords.length} 个岗位关键词</h2>
+                <p>
+                  {result.matched.length
+                    ? `${result.matched.join("、")} 已在简历中体现。`
+                    : "暂未在简历中找到明确匹配关键词。"}
+                  {result.missing.length ? ` ${result.missing.join("、")} 尚未体现。` : ""}
+                </p>
+              </div>
+              <div className="score-delta">
+                <strong>{result.missing.length}</strong>
+                <span>待确认缺失项</span>
+              </div>
+            </div>
+
+            <div className="result-tabs">
+              {[
+                ["match", "匹配报告"],
+                ["keywords", "JD 解析"],
+                ["advice", "优化建议"],
+                ["interview", "面试准备"],
+              ].map(([key, label]) => (
+                <button
+                  className={analysisTab === key ? "active" : ""}
+                  onClick={() => setAnalysisTab(key)}
+                  key={key}
+                >
+                  {label}
+                  {key === "advice" && <span>{suggestionCount}</span>}
+                </button>
+              ))}
+            </div>
+
+            {analysisTab === "match" && <MatchReport analysis={result} suggestionCount={suggestionCount} goOptimize={goOptimize} />}
+            {analysisTab === "keywords" && <KeywordReport analysis={result} />}
+            {analysisTab === "advice" && <AdviceReport suggestions={suggestions} goOptimize={goOptimize} />}
+            {analysisTab === "interview" && <InterviewReport questions={result.questions} />}
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MatchReport({
+  analysis,
+  suggestionCount,
+  goOptimize,
+}: {
+  analysis: JDAnalysisResult;
+  suggestionCount: number;
+  goOptimize: () => void;
+}) {
+  return (
+    <div className="result-content">
+      <div className="breakdown-grid">
+        {[
+          ["关键词覆盖", analysis.score, `${analysis.matched.length}/${analysis.keywords.length} 个关键词已有体现`],
+          ["岗位缺失项", Math.max(0, 100 - analysis.score), `${analysis.missing.length} 项要求尚未在简历中体现`],
+          ["成果表达", 60, "请人工检查是否包含可验证的动作与结果"],
+          ["事实安全", 100, "规则分析不会向简历添加不存在的信息"],
+        ].map(([label, score, note]) => (
+          <div className="breakdown-card" key={String(label)}>
+            <div><strong>{label}</strong><span>{score}</span></div>
+            <i><b style={{ width: `${score}%` }} /></i>
+            <p>{note}</p>
+          </div>
+        ))}
+      </div>
+      <div className="evidence-grid">
+        <section className="evidence-card strength">
+          <div className="evidence-head">
+            <span>✓</span>
+            <div><h3>简历优势</h3><p>{analysis.matched.length} 项要求已有文字证据</p></div>
+          </div>
+          {(analysis.matched.length ? analysis.matched : ["暂无明确匹配项"]).map((title) => (
+            <div className="evidence-row" key={title}>
+              <strong>{title}</strong><p>简历正文中检测到对应关键词</p><em>已匹配</em>
+            </div>
+          ))}
+        </section>
+        <section className="evidence-card gap">
+          <div className="evidence-head">
+            <span>!</span>
+            <div><h3>暂未体现</h3><p>不是能力结论，只代表简历无证据</p></div>
+          </div>
+          {(analysis.missing.length ? analysis.missing : ["无"]).map((title) => (
+            <div className="evidence-row" key={title}>
+              <strong>{title}</strong><p>JD 中出现，但简历正文未检测到</p><em>待确认</em>
+            </div>
+          ))}
+        </section>
+      </div>
+      <div className="result-cta">
+        <div><strong>已生成 {suggestionCount} 条规则建议</strong><span>缺失技能不会自动写入简历</span></div>
+        <button className="btn primary" onClick={goOptimize}>查看优化对比 →</button>
+      </div>
+    </div>
+  );
+}
+
+function KeywordReport({ analysis }: { analysis: JDAnalysisResult }) {
+  return (
+    <div className="result-content keyword-content">
+      <section>
+        <h3>硬性要求</h3>
+        <div className="keyword-cloud">
+          {(analysis.keywords.length ? analysis.keywords : ["暂未识别到常见技术关键词"]).map(
+            (keyword) => (
+              <span className={analysis.matched.includes(keyword) ? "matched" : ""} key={keyword}>
+                {analysis.matched.includes(keyword) ? "✓ " : ""}{keyword}
+              </span>
+            ),
+          )}
+        </div>
+      </section>
+      <section>
+        <h3>软性能力</h3>
+        <div className="keyword-cloud soft">
+          {["沟通协作", "学习能力", "问题定位", "需求理解"].map((keyword) => (
+            <span key={keyword}>{keyword}</span>
+          ))}
+        </div>
+      </section>
+      <section className="invalid-copy">
+        <span>低筛选价值描述</span>
+        <p>“具备良好的沟通能力和学习能力”属于通用描述，需要用经历证据支撑。</p>
+      </section>
+    </div>
+  );
+}
+
+function AdviceReport({
+  suggestions,
+  goOptimize,
+}: {
+  suggestions: Suggestion[];
+  goOptimize: () => void;
+}) {
+  return (
+    <div className="result-content">
+      <div className="advice-list">
+        {suggestions.map((suggestion, index) => (
+          <div className="advice-row" key={suggestion.id}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <div><strong>{suggestion.kind}</strong><p>{suggestion.module} · {suggestion.reason}</p></div>
+            <em>{suggestion.safe ? "安全建议" : "需要确认"}</em>
+          </div>
+        ))}
+      </div>
+      <button className="btn primary wide" onClick={goOptimize}>逐条查看修改前后</button>
+    </div>
+  );
+}
+
+function InterviewReport({
+  questions,
+}: {
+  questions: [string, string, string][];
+}) {
+  return (
+    <div className="result-content interview-list">
+      {questions.map(([tag, question, source], index) => (
+        <article key={question}>
+          <span>{index + 1}</span>
+          <div><em>{tag}</em><h3>{question}</h3><p>{source}</p></div>
+          <button>准备要点 ＋</button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function OptimizePage({
+  suggestions,
+  target,
+  selected,
+  setSelected,
+  updateSuggestion,
+  save,
+  back,
+}: {
+  suggestions: Suggestion[];
+  target: string;
+  selected: number;
+  setSelected: (id: number) => void;
+  updateSuggestion: (id: number, status: Suggestion["status"]) => void;
+  save: () => void;
+  back: () => void;
+}) {
+  const item = suggestions.find((suggestion) => suggestion.id === selected) ?? suggestions[0];
+  const accepted = suggestions.filter((suggestion) => suggestion.status === "accepted").length;
+  const decided = suggestions.filter((suggestion) => suggestion.status !== "pending").length;
+  return (
+    <div className="optimize-page">
+      <header className="optimize-topbar">
+        <div>
+          <button onClick={back}>← 返回分析</button>
+          <div>
+            <p className="eyebrow">规则优化对比</p>
+            <h1>{target} · JD 定向优化</h1>
+          </div>
+        </div>
+        <div className="decision-progress">
+          <span>{decided} / {suggestions.length} 已处理</span>
+          <i><b style={{ width: `${(decided / suggestions.length) * 100}%` }} /></i>
+        </div>
+        <button className="btn primary" onClick={save}>保存为新版本</button>
+      </header>
+
+      <div className="optimize-workspace">
+        <aside className="suggestion-list">
+          <div className="suggestion-list-head">
+            <div><strong>修改建议</strong><span>{suggestions.length}</span></div>
+            <small>逐条确认后再保存</small>
+          </div>
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              className={selected === suggestion.id ? "suggestion-nav active" : "suggestion-nav"}
+              onClick={() => setSelected(suggestion.id)}
+            >
+              <span className={`status-dot ${suggestion.status}`}>{suggestion.status === "accepted" ? "✓" : suggestion.status === "rejected" ? "×" : index + 1}</span>
+              <div><strong>{suggestion.kind}</strong><small>{suggestion.module} · {suggestion.keyword}</small></div>
+              <em>{suggestion.safe ? "安全" : "需补充"}</em>
+            </button>
+          ))}
+          <div className="fact-guard">
+            <span>事实保护已开启</span>
+            <p>新增数字、技能或成果时，必须先由你补充真实信息。</p>
+          </div>
+        </aside>
+
+        <section className="comparison-area">
+          <div className="comparison-heading">
+            <div>
+              <span className={item.safe ? "safe-badge" : "warning-badge"}>
+                {item.safe ? "✓ 事实安全" : "! 需要真实信息"}
+              </span>
+              <h2>{item.kind}</h2>
+              <p>{item.reason}</p>
+            </div>
+            <span className="keyword-reference">对应 JD：{item.keyword}</span>
+          </div>
+
+          <div className="comparison-grid">
+            <article className="compare-card original">
+              <header><span>修改前</span><em>原始简历</em></header>
+              <div className="compare-module-label">{item.module}</div>
+              <p>{item.original}</p>
+            </article>
+            <article className="compare-card optimized">
+              <header><span>修改后</span><em>规则建议预览</em></header>
+              <div className="compare-module-label">{item.module}</div>
+              <p>{item.optimized}</p>
+              {!item.safe && (
+                <div className="unsafe-note">【】中的内容必须由你填写，当前版本不会写入简历。</div>
+              )}
+            </article>
+          </div>
+
+          <div className="change-explanation">
+            <span>修改说明</span>
+            <p>{item.reason}</p>
+            <div>
+              <em>未修改时间</em><em>未添加技能</em><em>未虚构成果</em>
+            </div>
+          </div>
+
+          <div className="decision-actions">
+            <button
+              className={item.status === "rejected" ? "reject active" : "reject"}
+              onClick={() => updateSuggestion(item.id, "rejected")}
+            >
+              × 保留原文
+            </button>
+            <span>你的选择可以随时更改</span>
+            <button
+              className={item.status === "accepted" ? "accept active" : "accept"}
+              onClick={() => updateSuggestion(item.id, "accepted")}
+              disabled={!item.safe}
+            >
+              ✓ {item.safe ? "接受修改" : "补充后可接受"}
+            </button>
+          </div>
+        </section>
+
+        <aside className="optimization-summary">
+          <span className="panel-kicker">版本摘要</span>
+          <h3>当前决策</h3>
+          <div className="decision-stat">
+            <div><strong>{accepted}</strong><span>已接受</span></div>
+            <div><strong>{suggestions.filter((s) => s.status === "rejected").length}</strong><span>已拒绝</span></div>
+          </div>
+          <div className="summary-divider" />
+          <h4>将产生的变化</h4>
+          <ul>
+            <li>相关经历排序更清晰</li>
+            <li>Java / OOP 关键词更突出</li>
+            <li>原始版本完整保留</li>
+          </ul>
+          <button className="btn dark wide" onClick={save}>完成并保存版本</button>
+          <p>保存后可继续手动微调</p>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  hint,
+  rows = 4,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+  rows?: number;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <textarea
+        rows={rows}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+
+function SmartHint({ project = false }: { project?: boolean }) {
+  return (
+    <div className="smart-hint">
+      <span className="hint-icon">提示</span>
+      <div>
+        <strong>{project ? "这段项目经历还可以更具体" : "建议补充可验证的信息"}</strong>
+        <p>
+          {project
+            ? "你解决了什么具体问题？哪些部分由你独立完成？"
+            : "使用了什么工具？数据规模多大？最终产生了什么结果？"}
+        </p>
+      </div>
+      <button>查看写法</button>
+    </div>
+  );
+}
+
+function TruthNotice() {
+  return (
+    <div className="truth-notice">
+      <span>盾</span>
+      <p><strong>真实信息保护</strong>写作提示只基于你已填写的内容，不会添加不存在的经历、技能或数据。</p>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header><h2>{title}</h2><button onClick={onClose}>×</button></header>
+        {children}
+      </section>
+    </div>
+  );
+}
