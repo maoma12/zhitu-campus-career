@@ -47,3 +47,4 @@ next-env.d.ts
 # local build and deployment artifacts
 *.tsbuildinfo
 /site-package-*.tar.gz
+/*.bundle
