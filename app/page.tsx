@@ -3348,6 +3348,34 @@ function Editor({
     clone.style.margin = "0";
     clone.style.boxShadow = "none";
     clone.style.setProperty("--resume-pages", String(pages));
+    // SVG foreignObject rendering can resolve point units and `normal`
+    // line-heights with different font metrics from the live HTML document.
+    // Freeze every text node to the browser-computed pixel values before
+    // rasterization so those small differences cannot accumulate by section.
+    clone.style.setProperty(
+      "--resume-body-font-size",
+      window.getComputedStyle(sourcePaper).fontSize,
+    );
+    const sourceTextNodes = [
+      sourcePaper,
+      ...Array.from(sourcePaper.querySelectorAll<HTMLElement>("*")),
+    ];
+    const clonedTextNodes = [
+      clone,
+      ...Array.from(clone.querySelectorAll<HTMLElement>("*")),
+    ];
+    sourceTextNodes.forEach((sourceNode, index) => {
+      const clonedNode = clonedTextNodes[index];
+      if (!clonedNode) return;
+      const computed = window.getComputedStyle(sourceNode);
+      clonedNode.style.fontFamily = computed.fontFamily;
+      clonedNode.style.fontSize = computed.fontSize;
+      clonedNode.style.fontStyle = computed.fontStyle;
+      clonedNode.style.fontWeight = computed.fontWeight;
+      clonedNode.style.letterSpacing = computed.letterSpacing;
+      clonedNode.style.lineHeight = computed.lineHeight;
+      clonedNode.style.wordSpacing = computed.wordSpacing;
+    });
 
     const stylesheetText = Array.from(document.styleSheets)
       .map((stylesheet) => {
@@ -3360,6 +3388,13 @@ function Editor({
         }
       })
       .join("\n")
+      // The preview follows the CSS screen conversion of 1pt = 4/3px. Convert
+      // remaining point values before the stylesheet enters SVG so the image
+      // decoder cannot reinterpret them as smaller physical units.
+      .replace(
+        /(-?(?:\d+|\d*\.\d+))pt\b/gi,
+        (_, value: string) => `${Number.parseFloat(value) * (4 / 3)}px`,
+      )
       .replaceAll("]]>", "]]]]><![CDATA[>");
     const serializedPaper = new XMLSerializer().serializeToString(clone);
     const svg = [
