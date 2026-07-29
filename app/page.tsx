@@ -27,7 +27,7 @@ import {
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
-type ModuleKey =
+type StandardModuleKey =
   | "basic"
   | "experience"
   | "education"
@@ -36,6 +36,14 @@ type ModuleKey =
   | "certificate"
   | "evaluation"
   | "portfolio";
+type CustomModuleKey = `custom:${string}`;
+type ModuleKey = StandardModuleKey | CustomModuleKey;
+
+type CustomModule = {
+  id: CustomModuleKey;
+  title: string;
+  content: string;
+};
 
 type Experience = {
   id: string;
@@ -86,6 +94,8 @@ type Resume = {
   certificate: string;
   evaluation: string;
   portfolio: string;
+  moduleLabels: Partial<Record<StandardModuleKey, string>>;
+  customModules: CustomModule[];
   moduleOrder: ModuleKey[];
   hiddenModules: ModuleKey[];
 };
@@ -128,7 +138,7 @@ type JDAnalysisResult = {
   questions: [string, string, string][];
 };
 
-const moduleMeta: Record<ModuleKey, { label: string; icon: string }> = {
+const moduleMeta: Record<StandardModuleKey, { label: string; icon: string }> = {
   basic: { label: "基本信息", icon: "人" },
   experience: { label: "实习经历", icon: "历" },
   education: { label: "教育经历", icon: "学" },
@@ -139,7 +149,7 @@ const moduleMeta: Record<ModuleKey, { label: string; icon: string }> = {
   portfolio: { label: "作品展示", icon: "链" },
 };
 
-const defaultOrder: ModuleKey[] = [
+const defaultOrder: StandardModuleKey[] = [
   "basic",
   "experience",
   "education",
@@ -149,6 +159,24 @@ const defaultOrder: ModuleKey[] = [
   "evaluation",
   "portfolio",
 ];
+
+function isStandardModuleKey(key: ModuleKey): key is StandardModuleKey {
+  return defaultOrder.includes(key as StandardModuleKey);
+}
+
+function moduleLabel(resume: Resume, key: ModuleKey) {
+  if (isStandardModuleKey(key)) {
+    return resume.moduleLabels[key]?.trim() || moduleMeta[key].label;
+  }
+  return (
+    resume.customModules.find((item) => item.id === key)?.title.trim() ||
+    "自定义模块"
+  );
+}
+
+function moduleIcon(key: ModuleKey) {
+  return isStandardModuleKey(key) ? moduleMeta[key].icon : "自";
+}
 
 const seedResume: Resume = {
   id: "resume-main",
@@ -199,22 +227,10 @@ const seedResume: Resume = {
   evaluation:
     "逻辑清晰，能够从用户问题中拆解需求并协同推进落地；保持对技术实现的好奇心和持续学习习惯。",
   portfolio: "GitHub · github.com/chen-maoyang  ｜  作品集 · portfolio.example.com",
+  moduleLabels: {},
+  customModules: [],
   moduleOrder: defaultOrder,
   hiddenModules: [],
-};
-
-const secondResume: Resume = {
-  ...seedResume,
-  id: "resume-product",
-  name: "产品经理实习简历",
-  target: "产品经理实习生",
-  updated: "昨天 18:42",
-  completion: 82,
-  version: 2,
-  basic: { ...seedResume.basic, target: "产品经理实习生" },
-  experiences: seedResume.experiences.map((item) => ({ ...item, id: "experience-product" })),
-  educations: seedResume.educations.map((item) => ({ ...item, id: "education-product" })),
-  projects: seedResume.projects.map((item) => ({ ...item, id: "project-product" })),
 };
 
 const blankResume: Resume = {
@@ -240,6 +256,8 @@ const blankResume: Resume = {
   certificate: "",
   evaluation: "",
   portfolio: "",
+  moduleLabels: {},
+  customModules: [],
   moduleOrder: defaultOrder,
   hiddenModules: [],
 };
@@ -494,9 +512,13 @@ function safeNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function normalizeModuleList(value: unknown, fallback: ModuleKey[]) {
+function normalizeModuleList(
+  value: unknown,
+  fallback: ModuleKey[],
+  customIds: CustomModuleKey[] = [],
+) {
   if (!Array.isArray(value)) return [...fallback];
-  const allowed = new Set<ModuleKey>(defaultOrder);
+  const allowed = new Set<ModuleKey>([...defaultOrder, ...customIds]);
   const result = value.filter(
     (item): item is ModuleKey =>
       typeof item === "string" && allowed.has(item as ModuleKey),
@@ -548,13 +570,44 @@ function normalizeResume(value: unknown): Resume {
     };
   };
 
+  const customModules: CustomModule[] = Array.isArray(safeValue.customModules)
+    ? safeValue.customModules
+        .filter(isRecord)
+        .map((item, index) => {
+          const rawId = safeString(item.id);
+          const id = (
+            rawId.startsWith("custom:")
+              ? rawId
+              : `custom:${Date.now()}-${index}`
+          ) as CustomModuleKey;
+          return {
+            id,
+            title: safeString(item.title, `自定义模块 ${index + 1}`),
+            content: safeString(item.content),
+          };
+        })
+    : [];
+  const customIds = customModules.map((item) => item.id);
+
   const moduleOrder = normalizeModuleList(
     safeValue.moduleOrder,
     defaultOrder,
+    customIds,
   );
   defaultOrder.forEach((key) => {
     if (!moduleOrder.includes(key)) moduleOrder.push(key);
   });
+  customIds.forEach((key) => {
+    if (!moduleOrder.includes(key)) moduleOrder.push(key);
+  });
+  const rawLabels = isRecord(safeValue.moduleLabels)
+    ? safeValue.moduleLabels
+    : {};
+  const moduleLabels = Object.fromEntries(
+    defaultOrder
+      .map((key) => [key, safeString(rawLabels[key]).trim()] as const)
+      .filter(([, value]) => Boolean(value)),
+  ) as Partial<Record<StandardModuleKey, string>>;
 
   return {
     id: safeString(safeValue.id) || `resume-${Date.now()}`,
@@ -594,8 +647,10 @@ function normalizeResume(value: unknown): Resume {
     certificate: safeString(safeValue.certificate),
     evaluation: safeString(safeValue.evaluation),
     portfolio: safeString(safeValue.portfolio),
+    moduleLabels,
+    customModules,
     moduleOrder,
-    hiddenModules: normalizeModuleList(safeValue.hiddenModules, []),
+    hiddenModules: normalizeModuleList(safeValue.hiddenModules, [], customIds),
   };
 }
 
@@ -609,50 +664,104 @@ function snapshotTime() {
   }).format(new Date());
 }
 
+function createUniqueId(prefix: string) {
+  return `${prefix}-${Date.now()}`;
+}
+
 type ExportSection = { heading: string; lines: string[] };
 
-function resumeExportSections(resume: Resume): ExportSection[] {
-  const visible = new Set(
-    resume.moduleOrder.filter((key) => !resume.hiddenModules.includes(key)),
+type FormattedSegment = {
+  text: string;
+  bold: boolean;
+};
+
+function formattedSegments(value: string): FormattedSegment[] {
+  const segments: FormattedSegment[] = [];
+  const pattern = /\*\*([\s\S]*?)\*\*/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value))) {
+    if (match.index > cursor) {
+      segments.push({ text: value.slice(cursor, match.index), bold: false });
+    }
+    segments.push({ text: match[1], bold: true });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < value.length) {
+    segments.push({ text: value.slice(cursor), bold: false });
+  }
+  return segments.length ? segments : [{ text: value, bold: false }];
+}
+
+// 保留给后续重新启用的文本型导出流程。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function plainFormattedText(value: string) {
+  return formattedSegments(value)
+    .map((segment) => segment.text)
+    .join("");
+}
+
+function FormattedText({ value }: { value: string }) {
+  return (
+    <>
+      {formattedSegments(value).map((segment, index) =>
+        segment.bold ? (
+          <strong key={`${index}-${segment.text}`}>{segment.text}</strong>
+        ) : (
+          <span key={`${index}-${segment.text}`}>{segment.text}</span>
+        ),
+      )}
+    </>
   );
+}
+
+function resumeExportSections(resume: Resume): ExportSection[] {
   const sections: ExportSection[] = [];
-  if (visible.has("experience") && resume.experiences.length) {
-    sections.push({
-      heading: "实习经历",
-      lines: resume.experiences.flatMap((item) => [
-        `${item.company}｜${item.role}｜${item.period}`,
-        item.description,
-      ]),
+  resume.moduleOrder
+    .filter(
+      (key) => key !== "basic" && !resume.hiddenModules.includes(key),
+    )
+    .forEach((key) => {
+      if (key === "experience" && resume.experiences.length) {
+        sections.push({
+          heading: moduleLabel(resume, key),
+          lines: resume.experiences.flatMap((item) => [
+            `${item.company}｜${item.role}｜${item.period}`,
+            item.description,
+          ]),
+        });
+      } else if (key === "education" && resume.educations.length) {
+        sections.push({
+          heading: moduleLabel(resume, key),
+          lines: resume.educations.flatMap((item) => [
+            `${item.school}｜${item.major}｜${item.degree}｜${item.period}`,
+            item.detail,
+          ]),
+        });
+      } else if (key === "project" && resume.projects.length) {
+        sections.push({
+          heading: moduleLabel(resume, key),
+          lines: resume.projects.flatMap((item) => [
+            `${item.name}｜${item.role}｜${item.period}`,
+            item.stack ? `技术栈：${item.stack}` : "",
+            item.description,
+          ]),
+        });
+      } else {
+        const text = isStandardModuleKey(key)
+          ? key === "skills"
+            ? resume.skills
+            : key === "certificate"
+              ? resume.certificate
+              : key === "evaluation"
+                ? resume.evaluation
+                : resume.portfolio
+          : resume.customModules.find((item) => item.id === key)?.content || "";
+        if (text.trim()) {
+          sections.push({ heading: moduleLabel(resume, key), lines: [text] });
+        }
+      }
     });
-  }
-  if (visible.has("education") && resume.educations.length) {
-    sections.push({
-      heading: "教育经历",
-      lines: resume.educations.flatMap((item) => [
-        `${item.school}｜${item.major}｜${item.degree}｜${item.period}`,
-        item.detail,
-      ]),
-    });
-  }
-  if (visible.has("project") && resume.projects.length) {
-    sections.push({
-      heading: "项目经历",
-      lines: resume.projects.flatMap((item) => [
-        `${item.name}｜${item.role}｜${item.period}`,
-        item.stack ? `技术栈：${item.stack}` : "",
-        item.description,
-      ]),
-    });
-  }
-  const simple: [ModuleKey, string, string][] = [
-    ["skills", "技能特长", resume.skills],
-    ["certificate", "证书荣誉", resume.certificate],
-    ["evaluation", "自我评价", resume.evaluation],
-    ["portfolio", "作品链接", resume.portfolio],
-  ];
-  simple.forEach(([key, heading, text]) => {
-    if (visible.has(key) && text.trim()) sections.push({ heading, lines: [text] });
-  });
   return sections;
 }
 
@@ -698,6 +807,8 @@ function wrapExportText(value: string, maxWidth = 84) {
   return output.length ? output : [""];
 }
 
+// 保留给后续重新启用的 ATS 文本 PDF 导出流程。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildAtsPdf(resume: Resume) {
   const encode = (value: string) => new TextEncoder().encode(value);
   const lines: { text: string; size: number; gap: number }[] = [
@@ -813,6 +924,8 @@ function buildAtsPdf(resume: Resume) {
   return joinBytes(chunks);
 }
 
+// 保留给后续重新启用的图片型 PDF 导出流程。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildVisualPdf(jpeg: Uint8Array, width: number, height: number) {
   const encode = (value: string) => new TextEncoder().encode(value);
   const chunks: Uint8Array[] = [];
@@ -931,6 +1044,8 @@ function zipStored(files: { name: string; data: Uint8Array }[]) {
   return joinBytes([...locals, centralData, end]);
 }
 
+// 保留给后续重新启用的结构化 DOCX 导出流程。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildDocx(resume: Resume) {
   const encode = (value: string) => new TextEncoder().encode(value);
   const paragraph = (
@@ -1054,6 +1169,8 @@ function buildDocx(resume: Resume) {
   ]);
 }
 
+// 保留给后续重新启用的预览型 DOCX 导出流程。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildPreviewDocx(png: Uint8Array) {
   const encode = (value: string) => new TextEncoder().encode(value);
   const documentXml =
@@ -1204,7 +1321,6 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready) return;
-    setSaveStatus("保存中…");
     const timer = window.setTimeout(() => {
       const workspace: StoredWorkspace = {
         resumes,
@@ -1371,6 +1487,8 @@ export default function Home() {
       certificate: "",
       evaluation: "",
       portfolio: "",
+      moduleLabels: {},
+      customModules: [],
       moduleOrder: [...defaultOrder],
       hiddenModules: [],
     };
@@ -1400,6 +1518,8 @@ export default function Home() {
         ...item,
         id: `project-${Date.now()}-${item.id}`,
       })),
+      moduleLabels: { ...resume.moduleLabels },
+      customModules: resume.customModules.map((item) => ({ ...item })),
     };
     setResumes((items) => [copy, ...items]);
     setToast("已复制为新的简历");
@@ -1526,7 +1646,7 @@ export default function Home() {
       (item) => item !== key && !current.hiddenModules.includes(item),
     );
     if (next) setActiveModule(next);
-    setToast(`${moduleMeta[key].label}已从预览中隐藏`);
+    setToast(`${moduleLabel(current, key)}已从预览中隐藏`);
   };
 
   const restoreModule = (key: ModuleKey) => {
@@ -1534,7 +1654,58 @@ export default function Home() {
       hiddenModules: current.hiddenModules.filter((item) => item !== key),
     });
     setActiveModule(key);
-    setToast(`${moduleMeta[key].label}已恢复`);
+    setToast(`${moduleLabel(current, key)}已恢复`);
+  };
+
+  const renameModule = (key: ModuleKey, title: string) => {
+    if (key === "basic") return;
+    if (isStandardModuleKey(key)) {
+      updateCurrent({
+        moduleLabels: {
+          ...current.moduleLabels,
+          [key]: title.slice(0, 24),
+        },
+      });
+      return;
+    }
+    updateCurrent({
+      customModules: current.customModules.map((item) =>
+        item.id === key ? { ...item, title: title.slice(0, 24) } : item,
+      ),
+    });
+  };
+
+  const addCustomModule = (title: string) => {
+    const id = `custom:${Date.now()}` as CustomModuleKey;
+    const nextTitle = title.trim().slice(0, 24) || "自定义模块";
+    updateCurrent({
+      customModules: [
+        ...current.customModules,
+        { id, title: nextTitle, content: "" },
+      ],
+      moduleOrder: [...current.moduleOrder, id],
+    });
+    setActiveModule(id);
+    setToast(`已添加「${nextTitle}」`);
+  };
+
+  const updateCustomModule = (key: CustomModuleKey, content: string) => {
+    updateCurrent({
+      customModules: current.customModules.map((item) =>
+        item.id === key ? { ...item, content } : item,
+      ),
+    });
+  };
+
+  const deleteCustomModule = (key: CustomModuleKey) => {
+    const label = moduleLabel(current, key);
+    updateCurrent({
+      customModules: current.customModules.filter((item) => item.id !== key),
+      moduleOrder: current.moduleOrder.filter((item) => item !== key),
+      hiddenModules: current.hiddenModules.filter((item) => item !== key),
+    });
+    setActiveModule("basic");
+    setToast(`已删除「${label}」`);
   };
 
   const analyzeJD = () => {
@@ -1641,7 +1812,7 @@ export default function Home() {
   const restoreSnapshot = (snapshot: ResumeSnapshot) => {
     if (!window.confirm(`恢复到「${snapshot.label}」？当前内容会先自动备份。`)) return;
     const backup: ResumeSnapshot = {
-      id: `snapshot-backup-${Date.now()}`,
+      id: createUniqueId("snapshot-backup"),
       label: `恢复前自动备份 · V${current.version}`,
       createdAt: snapshotTime(),
       resume: cloneResume(current),
@@ -1830,6 +2001,10 @@ export default function Home() {
             moveModule={moveModule}
             hideModule={hideModule}
             restoreModule={restoreModule}
+            renameModule={renameModule}
+            addCustomModule={addCustomModule}
+            updateCustomModule={updateCustomModule}
+            deleteCustomModule={deleteCustomModule}
             updateEntry={updateEntry}
             addEntry={addEntry}
             duplicateEntry={duplicateEntry}
@@ -2423,6 +2598,10 @@ function Editor({
   moveModule,
   hideModule,
   restoreModule,
+  renameModule,
+  addCustomModule,
+  updateCustomModule,
+  deleteCustomModule,
   updateEntry,
   addEntry,
   duplicateEntry,
@@ -2450,6 +2629,10 @@ function Editor({
   moveModule: (key: ModuleKey, direction: -1 | 1) => void;
   hideModule: (key: ModuleKey) => void;
   restoreModule: (key: ModuleKey) => void;
+  renameModule: (key: ModuleKey, title: string) => void;
+  addCustomModule: (title: string) => void;
+  updateCustomModule: (key: CustomModuleKey, content: string) => void;
+  deleteCustomModule: (key: CustomModuleKey) => void;
   updateEntry: (
     collection: "experiences" | "educations" | "projects",
     id: string,
@@ -2478,18 +2661,90 @@ function Editor({
 }) {
   const [smartOnePage, setSmartOnePage] = useState(true);
   const [fitsOnePage, setFitsOnePage] = useState(true);
+  const [compactLayout, setCompactLayout] = useState(false);
+  const [pageCount, setPageCount] = useState(1);
   const [exportOpen, setExportOpen] = useState(false);
+  const [addModuleOpen, setAddModuleOpen] = useState(false);
+  const [newModuleName, setNewModuleName] = useState("");
   const paperRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const paper = paperRef.current;
       if (paper) {
-        setFitsOnePage(paper.scrollHeight <= paper.clientHeight + 2);
+        paper.style.setProperty("--resume-pages", "1");
+        const a4PageHeight = 610 * (297 / 210);
+        const pageTopPadding = smartOnePage ? (compactLayout ? 27 : 31) : 38;
+        const pageBottomPadding = pageTopPadding;
+        const usablePageHeight =
+          a4PageHeight - pageTopPadding - pageBottomPadding;
+        const blocks = Array.from(
+          paper.querySelectorAll<HTMLElement>("[data-pagination-block]"),
+        );
+
+        blocks.forEach((block) => {
+          block.style.marginTop = "";
+        });
+
+        blocks.forEach((block, index) => {
+          const blockTop = block.offsetTop;
+          const blockHeight = block.offsetHeight;
+          let keepTogetherHeight = blockHeight;
+          if (block.dataset.paginationKind === "heading") {
+            const nextBlock = blocks[index + 1];
+            if (nextBlock) {
+              keepTogetherHeight =
+                nextBlock.offsetTop + nextBlock.offsetHeight - blockTop;
+            }
+          }
+
+          const currentPage = Math.floor(blockTop / a4PageHeight);
+          const safePageTop = currentPage * a4PageHeight + pageTopPadding;
+          const safePageBottom =
+            (currentPage + 1) * a4PageHeight - pageBottomPadding;
+          const startsInsideTopMargin =
+            currentPage > 0 && blockTop < safePageTop;
+          const crossesBottomMargin =
+            blockTop + keepTogetherHeight > safePageBottom &&
+            keepTogetherHeight <= usablePageHeight;
+
+          if (startsInsideTopMargin || crossesBottomMargin) {
+            const targetPage = startsInsideTopMargin
+              ? currentPage
+              : currentPage + 1;
+            const targetTop = targetPage * a4PageHeight + pageTopPadding;
+            const shift = Math.max(0, targetTop - blockTop);
+            const baseMargin =
+              Number.parseFloat(window.getComputedStyle(block).marginTop) || 0;
+            block.style.marginTop = `${baseMargin + shift}px`;
+          }
+        });
+
+        const contentBottom = blocks.reduce(
+          (maximum, block) =>
+            Math.max(maximum, block.offsetTop + block.offsetHeight),
+          0,
+        );
+        const naturalHeight = contentBottom + pageBottomPadding;
+        const fits = naturalHeight <= a4PageHeight + 2;
+        if (smartOnePage && !compactLayout && !fits) {
+          setCompactLayout(true);
+          return;
+        }
+        const pages = Math.max(1, Math.ceil((naturalHeight - 1) / a4PageHeight));
+        paper.style.setProperty("--resume-pages", String(pages));
+        setPageCount(pages);
+        setFitsOnePage(pages === 1);
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [resume, template, smartOnePage]);
+  }, [resume, template, smartOnePage, compactLayout]);
+
+  const toggleSmartOnePage = () => {
+    const nextValue = !smartOnePage;
+    setSmartOnePage(nextValue);
+    if (!nextValue) setCompactLayout(false);
+  };
 
   const safeFilename =
     resume.name.replace(/[<>:"/\\|?*]/g, "-").trim() || "我的简历";
@@ -2531,6 +2786,43 @@ function Editor({
     const setFont = (size: number, weight = 400) => {
       context.font = `${weight} ${size}px Arial, "Microsoft YaHei", "PingFang SC", sans-serif`;
     };
+    const layoutFormattedLines = (
+      value: string,
+      size: number,
+      weight: number,
+      maxWidth: number,
+    ) => {
+      const lines: { text: string; bold: boolean }[][] = [];
+      let line: { text: string; bold: boolean }[] = [];
+      let lineWidth = 0;
+      const flushLine = () => {
+        lines.push(line.length ? line : [{ text: "", bold: false }]);
+        line = [];
+        lineWidth = 0;
+      };
+      formattedSegments(value).forEach((segment) => {
+        Array.from(segment.text).forEach((character) => {
+          if (character === "\n") {
+            flushLine();
+            return;
+          }
+          setFont(size, segment.bold ? 700 : weight);
+          const characterWidth = context.measureText(character).width;
+          if (line.length && lineWidth + characterWidth > maxWidth) {
+            flushLine();
+          }
+          const previous = line[line.length - 1];
+          if (previous && previous.bold === segment.bold) {
+            previous.text += character;
+          } else {
+            line.push({ text: character, bold: segment.bold });
+          }
+          lineWidth += characterWidth;
+        });
+      });
+      if (line.length || !lines.length) flushLine();
+      return lines;
+    };
     const drawWrapped = (
       value: string,
       size: number,
@@ -2540,51 +2832,22 @@ function Editor({
       x = contentX,
       maxWidth = contentWidth,
     ) => {
-      setFont(size, weight);
       context.fillStyle = color;
-      const paragraphs = value.split(/\r?\n/);
-      paragraphs.forEach((paragraph) => {
-        if (!paragraph) {
-          y += lineHeight;
-          return;
-        }
-        let line = "";
-        Array.from(paragraph).forEach((character) => {
-          const test = line + character;
-          if (line && context.measureText(test).width > maxWidth) {
-            context.fillText(line, x, y);
-            y += lineHeight;
-            line = character;
-          } else {
-            line = test;
-          }
+      layoutFormattedLines(value, size, weight, maxWidth).forEach((line) => {
+        let cursorX = x;
+        line.forEach((run) => {
+          setFont(size, run.bold ? 700 : weight);
+          context.fillText(run.text, cursorX, y);
+          cursorX += context.measureText(run.text).width;
         });
-        if (line) {
-          context.fillText(line, x, y);
-          y += lineHeight;
-        }
+        y += lineHeight;
       });
     };
     const countWrappedLines = (value: string, maxWidth: number) => {
-      let count = 0;
-      value.split(/\r?\n/).forEach((paragraph) => {
-        if (!paragraph) {
-          count += 1;
-          return;
-        }
-        let line = "";
-        Array.from(paragraph).forEach((character) => {
-          const test = line + character;
-          if (line && context.measureText(test).width > maxWidth) {
-            count += 1;
-            line = character;
-          } else {
-            line = test;
-          }
-        });
-        if (line) count += 1;
-      });
-      return Math.max(1, count);
+      const fontSize = Number.parseFloat(
+        context.font.match(/([\d.]+)px/)?.[1] || "12",
+      );
+      return layoutFormattedLines(value, fontSize, 400, maxWidth).length;
     };
     const drawSectionHeading = (heading: string) => {
       y += px(smart ? 8 : 11);
@@ -2758,52 +3021,58 @@ function Editor({
       );
       y += px(5);
     }
-    if (!resume.hiddenModules.includes("experience")) {
-      drawSectionHeading("实习经历");
-      resume.experiences.forEach((item) =>
-        drawEntry(item.company, item.role, item.period, item.description),
-      );
-    }
-    if (!resume.hiddenModules.includes("education")) {
-      drawSectionHeading("教育经历");
-      resume.educations.forEach((item) =>
-        drawEntry(
-          item.school,
-          `${item.major} · ${item.degree}`,
-          item.period,
-          item.detail,
-        ),
-      );
-    }
-    if (!resume.hiddenModules.includes("project")) {
-      drawSectionHeading("项目经历");
-      resume.projects.forEach((item) =>
-        drawEntry(
-          item.name,
-          `${item.role} · ${item.stack}`,
-          item.period,
-          item.description,
-        ),
-      );
-    }
-    const simple: [ModuleKey, string, string][] = [
-      ["skills", "技能特长", resume.skills],
-      ["certificate", "证书荣誉", resume.certificate],
-      ["evaluation", "自我评价", resume.evaluation],
-      ["portfolio", "作品展示", resume.portfolio],
-    ];
-    simple.forEach(([key, heading, text]) => {
-      if (resume.hiddenModules.includes(key)) return;
-      drawSectionHeading(heading);
-      y += px(3);
-      drawWrapped(
-        text || "暂未填写",
-        px(smart ? 7 : 7.5),
-        400,
-        "#252b27",
-        px(smart ? 10.4 : 12),
-      );
-    });
+    resume.moduleOrder
+      .filter(
+        (key) => key !== "basic" && !resume.hiddenModules.includes(key),
+      )
+      .forEach((key) => {
+        drawSectionHeading(moduleLabel(resume, key));
+        if (key === "experience") {
+          resume.experiences.forEach((item) =>
+            drawEntry(item.company, item.role, item.period, item.description),
+          );
+          return;
+        }
+        if (key === "education") {
+          resume.educations.forEach((item) =>
+            drawEntry(
+              item.school,
+              [item.major, item.degree].filter(Boolean).join(" · "),
+              item.period,
+              item.detail,
+            ),
+          );
+          return;
+        }
+        if (key === "project") {
+          resume.projects.forEach((item) =>
+            drawEntry(
+              item.name,
+              [item.role, item.stack].filter(Boolean).join(" · "),
+              item.period,
+              item.description,
+            ),
+          );
+          return;
+        }
+        const text = isStandardModuleKey(key)
+          ? key === "skills"
+            ? resume.skills
+            : key === "certificate"
+              ? resume.certificate
+              : key === "evaluation"
+                ? resume.evaluation
+                : resume.portfolio
+          : resume.customModules.find((item) => item.id === key)?.content || "";
+        y += px(3);
+        drawWrapped(
+          text || "暂未填写",
+          px(smart ? 7 : 7.5),
+          400,
+          "#252b27",
+          px(smart ? 10.4 : 12),
+        );
+      });
     return canvas;
   };
 
@@ -2820,8 +3089,23 @@ function Editor({
 
   const exportPDF = async () => {
     setExportOpen(false);
+    const sourcePaper = paperRef.current;
+    if (!sourcePaper) {
+      notify("简历预览尚未准备好，请稍后重试");
+      return;
+    }
+    document.getElementById("resume-print-root")?.remove();
+    const printRoot = document.createElement("div");
+    printRoot.id = "resume-print-root";
+    const printPaper = sourcePaper.cloneNode(true) as HTMLElement;
+    printPaper.style.setProperty("--resume-pages", String(pageCount));
+    printRoot.appendChild(printPaper);
+    document.body.appendChild(printRoot);
     document.body.classList.add("printing-resume");
-    const cleanup = () => document.body.classList.remove("printing-resume");
+    const cleanup = () => {
+      document.body.classList.remove("printing-resume");
+      printRoot.remove();
+    };
     window.addEventListener("afterprint", cleanup, { once: true });
     window.setTimeout(() => {
       window.print();
@@ -2866,7 +3150,7 @@ function Editor({
         <div className="editor-actions">
           <button
             className={smartOnePage ? "one-page-toggle active" : "one-page-toggle"}
-            onClick={() => setSmartOnePage((value) => !value)}
+            onClick={toggleSmartOnePage}
             aria-pressed={smartOnePage}
             title="自动调整页边距、字号和模块间距，优先保持一页"
           >
@@ -2949,8 +3233,8 @@ function Editor({
                   key={key}
                   onClick={() => setActiveModule(key)}
                 >
-                  <span className="module-icon">{moduleMeta[key].icon}</span>
-                  <strong>{moduleMeta[key].label}</strong>
+                  <span className="module-icon">{moduleIcon(key)}</span>
+                  <strong>{moduleLabel(resume, key)}</strong>
                   <span className="module-order">
                     <i
                       onClick={(event) => {
@@ -2980,20 +3264,66 @@ function Editor({
               <small>已隐藏模块</small>
               {resume.hiddenModules.map((key) => (
                 <button key={key} onClick={() => restoreModule(key)}>
-                  ＋ {moduleMeta[key].label}
+                  ＋ {moduleLabel(resume, key)}
                 </button>
               ))}
             </div>
           )}
           <button
             className="add-module-button"
-            onClick={() => {
-              const key = resume.hiddenModules[0];
-              if (key) restoreModule(key);
-            }}
+            onClick={() => setAddModuleOpen((value) => !value)}
+            aria-expanded={addModuleOpen}
           >
             ＋ 添加简历模块
           </button>
+          {addModuleOpen && (
+            <div className="add-module-panel">
+              {resume.hiddenModules.length > 0 && (
+                <>
+                  <small>恢复已隐藏模块</small>
+                  <div className="add-module-options">
+                    {resume.hiddenModules.map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          restoreModule(key);
+                          setAddModuleOpen(false);
+                        }}
+                      >
+                        ＋ {moduleLabel(resume, key)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <label>
+                <span>新建自定义模块</span>
+                <input
+                  value={newModuleName}
+                  maxLength={24}
+                  placeholder="例如：校园经历、志愿服务"
+                  onChange={(event) => setNewModuleName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || !newModuleName.trim()) return;
+                    addCustomModule(newModuleName);
+                    setNewModuleName("");
+                    setAddModuleOpen(false);
+                  }}
+                />
+              </label>
+              <button
+                className="create-module-button"
+                disabled={!newModuleName.trim()}
+                onClick={() => {
+                  addCustomModule(newModuleName);
+                  setNewModuleName("");
+                  setAddModuleOpen(false);
+                }}
+              >
+                创建模块
+              </button>
+            </div>
+          )}
           <div className="completion-card">
             <div>
               <strong>{resume.completion}%</strong>
@@ -3007,7 +3337,19 @@ function Editor({
           <div className="form-panel-header">
             <div>
               <p className="eyebrow">正在编辑</p>
-              <h2>{moduleMeta[activeModule].label}</h2>
+              {activeModule === "basic" ? (
+                <h2>{moduleLabel(resume, activeModule)}</h2>
+              ) : (
+                <input
+                  className="module-name-input"
+                  value={moduleLabel(resume, activeModule)}
+                  maxLength={24}
+                  aria-label="模块名称"
+                  onChange={(event) =>
+                    renameModule(activeModule, event.target.value)
+                  }
+                />
+              )}
               <span>填写真实信息，右侧将实时更新</span>
             </div>
             {activeModule !== "basic" && (
@@ -3030,6 +3372,8 @@ function Editor({
             duplicateEntry={duplicateEntry}
             deleteEntry={deleteEntry}
             moveEntry={moveEntry}
+            updateCustomModule={updateCustomModule}
+            deleteCustomModule={deleteCustomModule}
           />
         </section>
 
@@ -3053,16 +3397,19 @@ function Editor({
               template={template}
               paperRef={paperRef}
               smartOnePage={smartOnePage}
-              ultraCompact={smartOnePage && !fitsOnePage}
+              ultraCompact={smartOnePage && compactLayout}
+              pageCount={pageCount}
             />
             <div className="paper-status">
-              <span>第 1 页 / 共 1 页</span>
+              <span>共 {pageCount} 页</span>
               <span>
                 {smartOnePage
                   ? fitsOnePage
                     ? "✓ 智能一页适配完成"
-                    : "正在进一步压缩排版"
-                  : "A4 标准排版"}
+                    : `内容较多，已自动扩展为 ${pageCount} 页`
+                  : pageCount === 1
+                    ? "A4 标准排版"
+                    : `内容较多，已自动扩展为 ${pageCount} 页`}
               </span>
             </div>
           </div>
@@ -3082,6 +3429,8 @@ function ModuleForm({
   duplicateEntry,
   deleteEntry,
   moveEntry,
+  updateCustomModule,
+  deleteCustomModule,
 }: {
   resume: Resume;
   activeModule: ModuleKey;
@@ -3110,6 +3459,8 @@ function ModuleForm({
     id: string,
     direction: -1 | 1,
   ) => void;
+  updateCustomModule: (key: CustomModuleKey, content: string) => void;
+  deleteCustomModule: (key: CustomModuleKey) => void;
 }) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState("");
@@ -3187,9 +3538,11 @@ function ModuleForm({
                   className="upload-field"
                   onClick={() => avatarInputRef.current?.click()}
                 >
-                  <span className="avatar-thumb">
-                    {resume.basic.avatar ? (
-                      <img src={resume.basic.avatar} alt="" />
+                    <span className="avatar-thumb">
+                      {resume.basic.avatar ? (
+                        // 用户头像是本地 data URL，不能交给 Next Image 优化器。
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={resume.basic.avatar} alt="" />
                     ) : (
                       resume.basic.name?.slice(0, 1) || "你"
                     )}
@@ -3315,8 +3668,39 @@ function ModuleForm({
     );
   }
 
+  if (!isStandardModuleKey(activeModule)) {
+    const customModule = resume.customModules.find(
+      (item) => item.id === activeModule,
+    );
+    if (!customModule) return null;
+    return (
+      <div className="form-stack">
+        <div className="form-card">
+          <TextField
+            label="模块内容"
+            value={customModule.content}
+            onChange={(value) => updateCustomModule(activeModule, value)}
+            rows={9}
+            hint="只填写真实经历或补充信息；输入换行会同步保留在预览和导出中。"
+          />
+        </div>
+        <button
+          className="delete-custom-module"
+          onClick={() => {
+            if (window.confirm(`确定删除「${customModule.title}」模块吗？`)) {
+              deleteCustomModule(activeModule);
+            }
+          }}
+        >
+          删除此自定义模块
+        </button>
+        <TruthNotice />
+      </div>
+    );
+  }
+
   const simpleMap: Record<
-    Exclude<ModuleKey, "basic" | "experience" | "education" | "project">,
+    Exclude<StandardModuleKey, "basic" | "experience" | "education" | "project">,
     { label: string; hint: string; field: keyof Resume }
   > = {
     skills: {
@@ -3352,7 +3736,7 @@ function ModuleForm({
           hint={config.hint}
         />
       </div>
-      <button className="add-entry">＋ 添加一项{moduleMeta[activeModule].label}</button>
+        <button className="add-entry">＋ 添加一项{moduleLabel(resume, activeModule)}</button>
       <TruthNotice />
     </div>
   );
@@ -3396,12 +3780,14 @@ function ResumePreview({
   paperRef,
   smartOnePage,
   ultraCompact,
+  pageCount,
 }: {
   resume: Resume;
   template: Template;
   paperRef: RefObject<HTMLElement | null>;
   smartOnePage: boolean;
   ultraCompact: boolean;
+  pageCount: number;
 }) {
   const visible = useMemo(
     () => resume.moduleOrder.filter((key) => !resume.hiddenModules.includes(key)),
@@ -3411,8 +3797,17 @@ function ResumePreview({
     <article
       ref={paperRef}
       className={`resume-paper template-${template}${smartOnePage ? " smart-one-page" : ""}${ultraCompact ? " ultra-compact" : ""}`}
+      style={{ "--resume-pages": pageCount } as React.CSSProperties}
     >
-      <header className="paper-header">
+      {Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => (
+        <span
+          aria-hidden="true"
+          className="paper-page-break"
+          key={`page-break-${index + 1}`}
+          style={{ "--page-index": index + 1 } as React.CSSProperties}
+        />
+      ))}
+      <header className="paper-header" data-pagination-block>
         <div className="paper-identity">
           <h1>{resume.basic.name || "你的姓名"}</h1>
           <p>{resume.basic.target || "求职目标"}</p>
@@ -3424,19 +3819,30 @@ function ResumePreview({
         </div>
         <div className="paper-avatar">
           {resume.basic.avatar ? (
+            // 用户头像是本地 data URL，不能交给 Next Image 优化器。
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={resume.basic.avatar} alt={`${resume.basic.name || "用户"}的头像`} />
           ) : (
             resume.basic.name?.slice(0, 1) || "你"
           )}
         </div>
       </header>
-      {resume.basic.summary && <p className="paper-summary">{resume.basic.summary}</p>}
+      {resume.basic.summary && (
+        <p className="paper-summary" data-pagination-block>
+          <FormattedText value={resume.basic.summary} />
+        </p>
+      )}
       <div className="paper-body">
         {visible
           .filter((key) => key !== "basic")
           .map((key) => (
             <section className={`paper-section section-${key}`} key={key}>
-              <h2>{moduleMeta[key].label}</h2>
+              <h2
+                data-pagination-block
+                data-pagination-kind="heading"
+              >
+                {moduleLabel(resume, key)}
+              </h2>
               {key === "experience" &&
                 resume.experiences.map((entry) => (
                   <PaperEntry
@@ -3462,15 +3868,25 @@ function ResumePreview({
                   <PaperEntry
                     key={entry.id}
                     title={entry.name}
-                    subtitle={`${entry.role} · ${entry.stack}`}
+                    subtitle={[entry.role, entry.stack].filter(Boolean).join(" · ")}
                     period={entry.period}
                     text={entry.description}
                   />
                 ))}
-              {key === "skills" && <p>{resume.skills || "暂未填写"}</p>}
-              {key === "certificate" && <p>{resume.certificate || "暂未填写"}</p>}
-              {key === "evaluation" && <p>{resume.evaluation || "暂未填写"}</p>}
-              {key === "portfolio" && <p>{resume.portfolio || "暂未填写"}</p>}
+              {key === "skills" && <p data-pagination-block><FormattedText value={resume.skills || "暂未填写"} /></p>}
+              {key === "certificate" && <p data-pagination-block><FormattedText value={resume.certificate || "暂未填写"} /></p>}
+              {key === "evaluation" && <p data-pagination-block><FormattedText value={resume.evaluation || "暂未填写"} /></p>}
+              {key === "portfolio" && <p data-pagination-block><FormattedText value={resume.portfolio || "暂未填写"} /></p>}
+              {!isStandardModuleKey(key) && (
+                <p data-pagination-block>
+                  <FormattedText
+                    value={
+                      resume.customModules.find((item) => item.id === key)
+                        ?.content || "暂未填写"
+                    }
+                  />
+                </p>
+              )}
             </section>
           ))}
       </div>
@@ -3490,13 +3906,13 @@ function PaperEntry({
   text: string;
 }) {
   return (
-    <div className="paper-entry">
+    <div className="paper-entry" data-pagination-block>
       <div className="paper-entry-head">
         <strong>{title || "待填写"}</strong>
         <span>{period}</span>
       </div>
-      <b>{subtitle}</b>
-      <p>{text}</p>
+      {subtitle && <b>{subtitle}</b>}
+      <p><FormattedText value={text} /></p>
     </div>
   );
 }
@@ -3989,13 +4405,52 @@ function TextField({
   hint?: string;
   rows?: number;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toggleBold = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = value.slice(start, end);
+    const replacement = `**${selected}**`;
+    onChange(value.slice(0, start) + replacement + value.slice(end));
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      const selectionStart = start + 2;
+      textarea.setSelectionRange(
+        selectionStart,
+        selectionStart + selected.length,
+      );
+    });
+  };
   return (
     <label className="field">
-      <span>{label}</span>
+      <span className="field-heading">
+        <span>{label}</span>
+        <button
+          type="button"
+          className="format-bold-button"
+          onClick={(event) => {
+            event.preventDefault();
+            toggleBold();
+          }}
+          title="加粗选中的文字"
+          aria-label={`加粗${label}中选中的文字`}
+        >
+          B
+        </button>
+      </span>
       <textarea
+        ref={textareaRef}
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+            event.preventDefault();
+            toggleBold();
+          }
+        }}
       />
       {hint && <small>{hint}</small>}
     </label>
