@@ -1012,9 +1012,14 @@ function buildAtsPdf(resume: Resume) {
   return joinBytes(chunks);
 }
 
-// 保留给后续重新启用的图片型 PDF 导出流程。
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function buildVisualPdf(jpeg: Uint8Array, width: number, height: number) {
+// 将预览快照逐页嵌入 A4，避免浏览器打印引擎重新计算排版。
+type VisualPdfPage = {
+  jpeg: Uint8Array;
+  width: number;
+  height: number;
+};
+
+function buildVisualPdf(pages: VisualPdfPage[]) {
   const encode = (value: string) => new TextEncoder().encode(value);
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [0];
@@ -1032,35 +1037,45 @@ function buildVisualPdf(jpeg: Uint8Array, width: number, height: number) {
   push(encode("%PDF-1.4\n"));
   push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
   object(1, "<< /Type /Catalog /Pages 2 0 R >>");
-  object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+  const pageObjectIds = pages.map((_, index) => 3 + index * 3);
   object(
-    3,
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>",
+    2,
+    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`,
   );
-  offsets[4] = length;
-  push(encode("4 0 obj\n"));
-  push(
-    encode(
-      `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
-    ),
-  );
-  push(jpeg);
-  push(encode("\nendstream\nendobj\n"));
-  const content = encode("q\n595.28 0 0 841.89 0 0 cm\n/Im0 Do\nQ\n");
-  object(
-    5,
-    joinBytes([
-      encode(`<< /Length ${content.length} >>\nstream\n`),
-      content,
-      encode("endstream"),
-    ]),
-  );
+  pages.forEach((page, index) => {
+    const pageId = pageObjectIds[index];
+    const imageId = pageId + 1;
+    const contentId = pageId + 2;
+    object(
+      pageId,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`,
+    );
+    offsets[imageId] = length;
+    push(encode(`${imageId} 0 obj\n`));
+    push(
+      encode(
+        `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.jpeg.length} >>\nstream\n`,
+      ),
+    );
+    push(page.jpeg);
+    push(encode("\nendstream\nendobj\n"));
+    const content = encode("q\n595.28 0 0 841.89 0 0 cm\n/Im0 Do\nQ\n");
+    object(
+      contentId,
+      joinBytes([
+        encode(`<< /Length ${content.length} >>\nstream\n`),
+        content,
+        encode("endstream"),
+      ]),
+    );
+  });
   const xrefOffset = length;
-  let xref = "xref\n0 6\n0000000000 65535 f \n";
-  for (let id = 1; id <= 5; id += 1) {
+  const objectCount = 3 + pages.length * 3;
+  let xref = `xref\n0 ${objectCount}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objectCount; id += 1) {
     xref += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
   }
-  xref += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  xref += `trailer\n<< /Size ${objectCount} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
   push(encode(xref));
   return joinBytes(chunks);
 }
@@ -3302,6 +3317,99 @@ function Editor({
     return canvas;
   };
 
+  const renderPreviewPageCanvases = async () => {
+    const sourcePaper = paperRef.current;
+    if (!sourcePaper) throw new Error("Resume preview is unavailable");
+
+    await document.fonts.ready;
+    await Promise.all(
+      Array.from(sourcePaper.querySelectorAll("img")).map((image) =>
+        image.complete
+          ? Promise.resolve()
+          : image.decode().catch(() => undefined),
+      ),
+    );
+
+    const paperWidth = 610;
+    const pageHeight = paperWidth * (297 / 210);
+    const pages = Math.max(1, pageCount);
+    const totalHeight = pageHeight * pages;
+    const renderScale = 3;
+    const pagePixelWidth = Math.round(paperWidth * renderScale);
+    const pagePixelHeight = Math.round(pageHeight * renderScale);
+
+    const clone = sourcePaper.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll(".paper-page-break").forEach((marker) => marker.remove());
+    clone.style.width = `${paperWidth}px`;
+    clone.style.minWidth = `${paperWidth}px`;
+    clone.style.maxWidth = `${paperWidth}px`;
+    clone.style.height = `${totalHeight}px`;
+    clone.style.minHeight = `${totalHeight}px`;
+    clone.style.margin = "0";
+    clone.style.boxShadow = "none";
+    clone.style.setProperty("--resume-pages", String(pages));
+
+    const stylesheetText = Array.from(document.styleSheets)
+      .map((stylesheet) => {
+        try {
+          return Array.from(stylesheet.cssRules)
+            .map((rule) => rule.cssText)
+            .join("\n");
+        } catch {
+          return "";
+        }
+      })
+      .join("\n")
+      .replaceAll("]]>", "]]]]><![CDATA[>");
+    const serializedPaper = new XMLSerializer().serializeToString(clone);
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${paperWidth}" height="${totalHeight}" viewBox="0 0 ${paperWidth} ${totalHeight}">`,
+      `<foreignObject width="${paperWidth}" height="${totalHeight}">`,
+      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${paperWidth}px;height:${totalHeight}px;overflow:hidden;background:#fff">`,
+      `<style><![CDATA[${stylesheetText}]]></style>`,
+      serializedPaper,
+      "</div></foreignObject></svg>",
+    ].join("");
+    const imageUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const value = new Image();
+      value.onload = () => resolve(value);
+      value.onerror = () => reject(new Error("Preview snapshot failed"));
+      value.src = imageUrl;
+    });
+    const fullCanvas = document.createElement("canvas");
+    fullCanvas.width = pagePixelWidth;
+    fullCanvas.height = pagePixelHeight * pages;
+    const fullContext = fullCanvas.getContext("2d");
+    if (!fullContext) throw new Error("Canvas is unavailable");
+    fullContext.fillStyle = "#ffffff";
+    fullContext.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+    fullContext.drawImage(image, 0, 0, fullCanvas.width, fullCanvas.height);
+
+    return Array.from({ length: pages }, (_, pageIndex) => {
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = pagePixelWidth;
+      pageCanvas.height = pagePixelHeight;
+      const pageContext = pageCanvas.getContext("2d");
+      if (!pageContext) throw new Error("Canvas is unavailable");
+      pageContext.fillStyle = "#ffffff";
+      pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageContext.drawImage(
+        fullCanvas,
+        0,
+        pageIndex * pagePixelHeight,
+        pagePixelWidth,
+        pagePixelHeight,
+        0,
+        0,
+        pagePixelWidth,
+        pagePixelHeight,
+      );
+      return pageCanvas;
+    });
+  };
+
   const downloadBlob = (blob: Blob, filename: string) => {
     const downloadUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -3315,38 +3423,40 @@ function Editor({
 
   const exportPDF = async () => {
     setExportOpen(false);
-    const sourcePaper = paperRef.current;
-    if (!sourcePaper) {
-      notify("简历预览尚未准备好，请稍后重试");
-      return;
+    notify("正在生成与预览一致的高清 PDF…");
+    try {
+      const canvases = await renderPreviewPageCanvases();
+      const pages = await Promise.all(
+        canvases.map(
+          (canvas) =>
+            new Promise<VisualPdfPage>((resolve, reject) => {
+              canvas.toBlob(
+                async (blob) => {
+                  if (!blob) {
+                    reject(new Error("JPEG encoding failed"));
+                    return;
+                  }
+                  resolve({
+                    jpeg: new Uint8Array(await blob.arrayBuffer()),
+                    width: canvas.width,
+                    height: canvas.height,
+                  });
+                },
+                "image/jpeg",
+                0.97,
+              );
+            }),
+        ),
+      );
+      downloadBlob(
+        new Blob([buildVisualPdf(pages)], { type: "application/pdf" }),
+        `${safeFilename}-A4.pdf`,
+      );
+      notify("高清 A4 PDF 已下载");
+    } catch (error) {
+      console.error("PDF export failed", error);
+      notify("PDF 生成失败，请稍后重试");
     }
-    document.getElementById("resume-print-root")?.remove();
-    const printRoot = document.createElement("div");
-    printRoot.id = "resume-print-root";
-    Array.from({ length: Math.max(1, pageCount) }, (_, pageIndex) => {
-      const printPage = document.createElement("div");
-      printPage.className = "resume-print-page";
-      const printViewport = document.createElement("div");
-      printViewport.className = "resume-print-page-viewport";
-      const printPaper = sourcePaper.cloneNode(true) as HTMLElement;
-      printPaper.style.setProperty("--resume-pages", String(pageCount));
-      printPaper.style.setProperty("--print-page-index", String(pageIndex));
-      printViewport.appendChild(printPaper);
-      printPage.appendChild(printViewport);
-      printRoot.appendChild(printPage);
-    });
-    document.body.appendChild(printRoot);
-    document.body.classList.add("printing-resume");
-    const cleanup = () => {
-      document.body.classList.remove("printing-resume");
-      printRoot.remove();
-    };
-    window.addEventListener("afterprint", cleanup, { once: true });
-    window.setTimeout(() => {
-      window.print();
-      window.setTimeout(cleanup, 800);
-    }, 80);
-    notify("请在打印窗口选择“另存为 PDF”");
   };
 
   const exportPNG = async () => {
@@ -3450,8 +3560,8 @@ function Editor({
                 <button onClick={exportPDF}>
                   <span>PDF</span>
                   <div>
-                    <strong>普通 A4 PDF</strong>
-                    <small>原生打印 · 与预览一致</small>
+                    <strong>高清 A4 PDF</strong>
+                    <small>锁定预览排版 · 直接下载</small>
                   </div>
                 </button>
                 <button onClick={exportPNG}>
