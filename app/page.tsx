@@ -27,11 +27,14 @@ import {
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
+type ResumeDensity = "normal" | "compact" | "ultra";
+type ResumeFontSize = 6 | 7 | 8 | 9 | 10 | 12;
 type StandardModuleKey =
   | "basic"
   | "experience"
   | "education"
   | "project"
+  | "campus"
   | "skills"
   | "certificate"
   | "evaluation"
@@ -71,10 +74,24 @@ type Project = {
   description: string;
 };
 
+type CampusExperience = {
+  id: string;
+  department: string;
+  period: string;
+  description: string;
+};
+
+type EntryCollection =
+  | "experiences"
+  | "educations"
+  | "projects"
+  | "campusExperiences";
+
 type Resume = {
   id: string;
   name: string;
   target: string;
+  fontSize: ResumeFontSize;
   updated: string;
   completion: number;
   version: number;
@@ -90,6 +107,7 @@ type Resume = {
   experiences: Experience[];
   educations: Education[];
   projects: Project[];
+  campusExperiences: CampusExperience[];
   skills: string;
   certificate: string;
   evaluation: string;
@@ -143,6 +161,7 @@ const moduleMeta: Record<StandardModuleKey, { label: string; icon: string }> = {
   experience: { label: "实习经历", icon: "历" },
   education: { label: "教育经历", icon: "学" },
   project: { label: "项目经历", icon: "项" },
+  campus: { label: "校园经历", icon: "校" },
   skills: { label: "技能特长", icon: "技" },
   certificate: { label: "证书荣誉", icon: "证" },
   evaluation: { label: "自我评价", icon: "评" },
@@ -154,6 +173,7 @@ const defaultOrder: StandardModuleKey[] = [
   "experience",
   "education",
   "project",
+  "campus",
   "skills",
   "certificate",
   "evaluation",
@@ -182,6 +202,7 @@ const seedResume: Resume = {
   id: "resume-main",
   name: "Java 后端开发校招简历",
   target: "Java 后端开发实习生",
+  fontSize: 9,
   updated: "刚刚",
   completion: 88,
   version: 3,
@@ -221,6 +242,12 @@ const seedResume: Resume = {
     description:
       "完成多文件 C++ 项目结构设计，基于继承与派生类实现任务分发、订单分配和本地数据持久化；独立设计控制台交互流程。",
   }],
+  campusExperiences: [{
+    id: "campus-seed",
+    department: "",
+    period: "",
+    description: "",
+  }],
   skills:
     "Java · C/C++ · SQL · 数据结构 · Git · 墨刀 · Excel · 英语六级",
   certificate: "全国大学生电子设计竞赛校级一等奖 · 大学英语六级",
@@ -237,6 +264,7 @@ const blankResume: Resume = {
   id: "resume-blank",
   name: "我的第一份简历",
   target: "",
+  fontSize: 9,
   updated: "刚刚",
   completion: 10,
   version: 1,
@@ -252,6 +280,12 @@ const blankResume: Resume = {
   experiences: [],
   educations: [],
   projects: [],
+  campusExperiences: [{
+    id: "campus-blank",
+    department: "",
+    period: "",
+    description: "",
+  }],
   skills: "",
   certificate: "",
   evaluation: "",
@@ -512,6 +546,17 @@ function safeNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function normalizeResumeFontSize(value: unknown): ResumeFontSize {
+  return value === 6 ||
+    value === 7 ||
+    value === 8 ||
+    value === 9 ||
+    value === 10 ||
+    value === 12
+    ? value
+    : 9;
+}
+
 function normalizeModuleList(
   value: unknown,
   fallback: ModuleKey[],
@@ -569,6 +614,18 @@ function normalizeResume(value: unknown): Resume {
       description: safeString(source.description),
     };
   };
+  const normalizeCampusExperience = (
+    item: unknown,
+    index: number,
+  ): CampusExperience => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `campus-${Date.now()}-${index}`,
+      department: safeString(source.department),
+      period: safeString(source.period),
+      description: safeString(source.description),
+    };
+  };
 
   const customModules: CustomModule[] = Array.isArray(safeValue.customModules)
     ? safeValue.customModules
@@ -594,6 +651,16 @@ function normalizeResume(value: unknown): Resume {
     defaultOrder,
     customIds,
   );
+  if (!moduleOrder.includes("campus")) {
+    const projectIndex = moduleOrder.indexOf("project");
+    moduleOrder.splice(projectIndex >= 0 ? projectIndex + 1 : moduleOrder.length, 0, "campus");
+  } else if (
+    moduleOrder.indexOf("campus") === moduleOrder.length - 1 &&
+    moduleOrder.indexOf("project") >= 0
+  ) {
+    moduleOrder.splice(moduleOrder.indexOf("campus"), 1);
+    moduleOrder.splice(moduleOrder.indexOf("project") + 1, 0, "campus");
+  }
   defaultOrder.forEach((key) => {
     if (!moduleOrder.includes(key)) moduleOrder.push(key);
   });
@@ -613,6 +680,7 @@ function normalizeResume(value: unknown): Resume {
     id: safeString(safeValue.id) || `resume-${Date.now()}`,
     name: safeString(safeValue.name, blankResume.name),
     target: safeString(safeValue.target),
+    fontSize: normalizeResumeFontSize(safeValue.fontSize),
     updated: safeString(safeValue.updated, "刚刚"),
     completion: Math.max(
       0,
@@ -643,6 +711,16 @@ function normalizeResume(value: unknown): Resume {
       : legacyProject
         ? [normalizeProject(legacyProject, 0)]
         : [],
+    campusExperiences:
+      Array.isArray(safeValue.campusExperiences) &&
+      safeValue.campusExperiences.length
+      ? safeValue.campusExperiences.map(normalizeCampusExperience)
+      : [{
+          id: `campus-${Date.now()}`,
+          department: "",
+          period: "",
+          description: "",
+        }],
     skills: safeString(safeValue.skills),
     certificate: safeString(safeValue.certificate),
     evaluation: safeString(safeValue.evaluation),
@@ -747,6 +825,14 @@ function resumeExportSections(resume: Resume): ExportSection[] {
             item.description,
           ]),
         });
+      } else if (key === "campus" && resume.campusExperiences.length) {
+        sections.push({
+          heading: moduleLabel(resume, key),
+          lines: resume.campusExperiences.flatMap((item) => [
+            `${item.department}｜${item.period}`,
+            item.description,
+          ]),
+        });
       } else {
         const text = isStandardModuleKey(key)
           ? key === "skills"
@@ -755,7 +841,9 @@ function resumeExportSections(resume: Resume): ExportSection[] {
               ? resume.certificate
               : key === "evaluation"
                 ? resume.evaluation
-                : resume.portfolio
+                : key === "portfolio"
+                  ? resume.portfolio
+                  : ""
           : resume.customModules.find((item) => item.id === key)?.content || "";
         if (text.trim()) {
           sections.push({ heading: moduleLabel(resume, key), lines: [text] });
@@ -1106,6 +1194,13 @@ function buildDocx(resume: Resume) {
       if (item.description) bodyBlocks.push(paragraph(item.description));
     });
   }
+  if (!resume.hiddenModules.includes("campus") && resume.campusExperiences.length) {
+    bodyBlocks.push(sectionHeading("校园经历"));
+    resume.campusExperiences.forEach((item) => {
+      bodyBlocks.push(entryTitle(`${item.department} ｜ ${item.period}`));
+      if (item.description) bodyBlocks.push(paragraph(item.description));
+    });
+  }
   const simpleSections: [ModuleKey, string, string][] = [
     ["skills", "技能特长", resume.skills],
     ["certificate", "证书荣誉", resume.certificate],
@@ -1234,6 +1329,7 @@ export default function Home() {
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [localPreviewMode, setLocalPreviewMode] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const current =
@@ -1285,6 +1381,17 @@ export default function Home() {
     };
     const initialize = async () => {
       try {
+        const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
+          window.location.hostname,
+        );
+        if (localPreview) {
+          setLocalPreviewMode(true);
+          const local =
+            localStorage.getItem("zhitu-workspace-v1") ??
+            localStorage.getItem("campus-career-prototype");
+          if (local) applyWorkspace(JSON.parse(local));
+          return;
+        }
         const redirected = await consumeAuthRedirect();
         const activeSession = redirected ?? (await getSession());
         if (cancelled) return;
@@ -1370,7 +1477,7 @@ export default function Home() {
   };
 
   const updateEntry = (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     patch: Record<string, string>,
   ) => {
@@ -1381,21 +1488,23 @@ export default function Home() {
     } as Partial<Resume>);
   };
 
-  const addEntry = (collection: "experiences" | "educations" | "projects") => {
+  const addEntry = (collection: EntryCollection) => {
     const id = `${collection}-${Date.now()}`;
     const blank =
       collection === "experiences"
         ? { id, company: "", role: "", period: "", description: "" }
         : collection === "educations"
           ? { id, school: "", major: "", degree: "", period: "", detail: "" }
-          : { id, name: "", role: "", period: "", stack: "", description: "" };
+          : collection === "projects"
+            ? { id, name: "", role: "", period: "", stack: "", description: "" }
+            : { id, department: "", period: "", description: "" };
     updateCurrent({
       [collection]: [...current[collection], blank],
     } as Partial<Resume>);
   };
 
   const duplicateEntry = (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => {
     const source = current[collection].find((item) => item.id === id);
@@ -1411,7 +1520,7 @@ export default function Home() {
   };
 
   const deleteEntry = (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => {
     if (current[collection].length === 1) {
@@ -1424,7 +1533,7 @@ export default function Home() {
   };
 
   const moveEntry = (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     direction: -1 | 1,
   ) => {
@@ -1483,6 +1592,12 @@ export default function Home() {
         stack: "",
         description: "",
       }],
+      campusExperiences: [{
+        id: `campus-${Date.now()}`,
+        department: "",
+        period: "",
+        description: "",
+      }],
       skills: "",
       certificate: "",
       evaluation: "",
@@ -1517,6 +1632,10 @@ export default function Home() {
       projects: resume.projects.map((item) => ({
         ...item,
         id: `project-${Date.now()}-${item.id}`,
+      })),
+      campusExperiences: resume.campusExperiences.map((item) => ({
+        ...item,
+        id: `campus-${Date.now()}-${item.id}`,
       })),
       moduleLabels: { ...resume.moduleLabels },
       customModules: resume.customModules.map((item) => ({ ...item })),
@@ -1893,7 +2012,7 @@ export default function Home() {
     );
   }
 
-  if (cloudConfigured && !session) {
+  if (cloudConfigured && !session && !localPreviewMode) {
     return (
       <AuthPage
         mode={authMode}
@@ -2634,21 +2753,21 @@ function Editor({
   updateCustomModule: (key: CustomModuleKey, content: string) => void;
   deleteCustomModule: (key: CustomModuleKey) => void;
   updateEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     patch: Record<string, string>,
   ) => void;
-  addEntry: (collection: "experiences" | "educations" | "projects") => void;
+  addEntry: (collection: EntryCollection) => void;
   duplicateEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => void;
   deleteEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => void;
   moveEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     direction: -1 | 1,
   ) => void;
@@ -2661,21 +2780,42 @@ function Editor({
 }) {
   const [smartOnePage, setSmartOnePage] = useState(true);
   const [fitsOnePage, setFitsOnePage] = useState(true);
-  const [compactLayout, setCompactLayout] = useState(false);
+  const [density, setDensity] = useState<ResumeDensity>("normal");
   const [pageCount, setPageCount] = useState(1);
   const [exportOpen, setExportOpen] = useState(false);
   const [addModuleOpen, setAddModuleOpen] = useState(false);
   const [newModuleName, setNewModuleName] = useState("");
   const paperRef = useRef<HTMLElement>(null);
+  const paginationCycleRef = useRef({
+    input: "",
+    exhausted: false,
+  });
+  const paginationInput = useMemo(
+    () => JSON.stringify([resume, template, smartOnePage]),
+    [resume, template, smartOnePage],
+  );
 
   useEffect(() => {
+    let validationFrame = 0;
     const frame = window.requestAnimationFrame(() => {
       const paper = paperRef.current;
       if (paper) {
+        const cycle = paginationCycleRef.current;
+        const inputChanged = cycle.input !== paginationInput;
+        if (inputChanged) {
+          cycle.input = paginationInput;
+          cycle.exhausted = false;
+          if (density !== "normal") {
+            setDensity("normal");
+            return;
+          }
+        }
+
         paper.style.setProperty("--resume-pages", "1");
         const a4PageHeight = 610 * (297 / 210);
-        const pageTopPadding = smartOnePage ? (compactLayout ? 27 : 31) : 38;
-        const pageBottomPadding = pageTopPadding;
+        const pageTopPadding =
+          density === "ultra" ? 24 : density === "compact" ? 31 : 38;
+        const pageBottomPadding = pageTopPadding / 2;
         const usablePageHeight =
           a4PageHeight - pageTopPadding - pageBottomPadding;
         const blocks = Array.from(
@@ -2686,64 +2826,123 @@ function Editor({
           block.style.marginTop = "";
         });
 
-        blocks.forEach((block, index) => {
+        const measurements = blocks.map((block, index) => {
           const blockTop = block.offsetTop;
           const blockHeight = block.offsetHeight;
-          let keepTogetherHeight = blockHeight;
-          if (block.dataset.paginationKind === "heading") {
+          const blockKind = block.dataset.paginationKind;
+          // 正文只保护开头约两行，剩余内容允许自然跨页，避免整段搬移后留下大块空白。
+          let keepTogetherHeight =
+            blockKind === "entry-body" || block.tagName === "P"
+              ? Math.min(blockHeight, 48)
+              : blockHeight;
+          if (blockKind === "heading" || blockKind === "entry-head") {
             const nextBlock = blocks[index + 1];
             if (nextBlock) {
               keepTogetherHeight =
-                nextBlock.offsetTop + nextBlock.offsetHeight - blockTop;
+                nextBlock.offsetTop +
+                Math.min(nextBlock.offsetHeight, blockKind === "heading" ? 72 : 48) -
+                blockTop;
             }
           }
 
-          const currentPage = Math.floor(blockTop / a4PageHeight);
+          return {
+            block,
+            blockTop,
+            blockHeight,
+            keepTogetherHeight,
+            baseMargin:
+              Number.parseFloat(window.getComputedStyle(block).marginTop) || 0,
+          };
+        });
+
+        const naturalBottom =
+          measurements.reduce(
+            (maximum, item) =>
+              Math.max(maximum, item.blockTop + item.blockHeight),
+            0,
+          ) + pageBottomPadding;
+        const naturallyFits = naturalBottom <= a4PageHeight + 2;
+
+        if (smartOnePage && !cycle.exhausted && !naturallyFits) {
+          if (density === "normal") {
+            setDensity("compact");
+            return;
+          }
+          if (density === "compact") {
+            setDensity("ultra");
+            return;
+          }
+
+          // 最大压缩仍无法容纳时，回到较易读的紧凑密度并正常分页。
+          cycle.exhausted = true;
+          setDensity("compact");
+          return;
+        }
+
+        let cumulativeShift = 0;
+        const placements: Array<{
+          block: HTMLElement;
+          marginTop: number;
+        }> = [];
+
+        measurements.forEach((item) => {
+          const adjustedTop = item.blockTop + cumulativeShift;
+          const currentPage = Math.floor(adjustedTop / a4PageHeight);
           const safePageTop = currentPage * a4PageHeight + pageTopPadding;
           const safePageBottom =
             (currentPage + 1) * a4PageHeight - pageBottomPadding;
           const startsInsideTopMargin =
-            currentPage > 0 && blockTop < safePageTop;
+            currentPage > 0 && adjustedTop < safePageTop;
           const crossesBottomMargin =
-            blockTop + keepTogetherHeight > safePageBottom &&
-            keepTogetherHeight <= usablePageHeight;
+            adjustedTop + item.keepTogetherHeight > safePageBottom &&
+            item.keepTogetherHeight <= usablePageHeight;
 
           if (startsInsideTopMargin || crossesBottomMargin) {
             const targetPage = startsInsideTopMargin
               ? currentPage
               : currentPage + 1;
             const targetTop = targetPage * a4PageHeight + pageTopPadding;
-            const shift = Math.max(0, targetTop - blockTop);
-            const baseMargin =
-              Number.parseFloat(window.getComputedStyle(block).marginTop) || 0;
-            block.style.marginTop = `${baseMargin + shift}px`;
+            const shift = Math.max(0, targetTop - adjustedTop);
+            if (shift > 0) {
+              cumulativeShift += shift;
+              placements.push({
+                block: item.block,
+                marginTop: item.baseMargin + shift,
+              });
+            }
           }
         });
 
-        const contentBottom = blocks.reduce(
-          (maximum, block) =>
-            Math.max(maximum, block.offsetTop + block.offsetHeight),
-          0,
-        );
-        const naturalHeight = contentBottom + pageBottomPadding;
-        const fits = naturalHeight <= a4PageHeight + 2;
-        if (smartOnePage && !compactLayout && !fits) {
-          setCompactLayout(true);
-          return;
-        }
-        const pages = Math.max(1, Math.ceil((naturalHeight - 1) / a4PageHeight));
-        paper.style.setProperty("--resume-pages", String(pages));
-        setPageCount(pages);
-        setFitsOnePage(pages === 1);
+        // 先完成全部读取与计算，再统一写入，避免前一块位移污染后续坐标。
+        placements.forEach(({ block, marginTop }) => {
+          block.style.marginTop = `${marginTop}px`;
+        });
+
+        validationFrame = window.requestAnimationFrame(() => {
+          const finalBottom =
+            blocks.reduce(
+              (maximum, block) =>
+                Math.max(maximum, block.offsetTop + block.offsetHeight),
+              0,
+            ) + pageBottomPadding;
+          const pages = Math.max(
+            1,
+            Math.ceil((finalBottom - 1) / a4PageHeight),
+          );
+          paper.style.setProperty("--resume-pages", String(pages));
+          setPageCount((current) => (current === pages ? current : pages));
+          setFitsOnePage(pages === 1);
+        });
       }
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [resume, template, smartOnePage, compactLayout]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(validationFrame);
+    };
+  }, [density, paginationInput, smartOnePage]);
 
   const toggleSmartOnePage = () => {
-    const nextValue = !smartOnePage;
-    setSmartOnePage(nextValue);
-    if (!nextValue) setCompactLayout(false);
+    setSmartOnePage((value) => !value);
   };
 
   const safeFilename =
@@ -2752,7 +2951,7 @@ function Editor({
   const renderResumeCanvas = async () => {
     const canvas = document.createElement("canvas");
     canvas.width = 1240;
-    canvas.height = 1754;
+    canvas.height = 1754 * Math.max(1, pageCount);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas is unavailable");
     const avatarImage = resume.basic.avatar
@@ -2768,13 +2967,25 @@ function Editor({
     const px = (value: number) => value * scale;
     const accent =
       template === "azure" ? "#315e88" : template === "sidebar" ? "#225e45" : "#1e2722";
-    const smart = smartOnePage;
+    const smart = density !== "normal";
+    const compact = density === "compact";
+    const ultra = density === "ultra";
+    const bodyFontSize = px(resume.fontSize * (4 / 3));
+    const sectionHeadingFontSize = px(10.5 * (4 / 3));
+    const bodyLineHeight = px(
+      resume.fontSize * (4 / 3) * (ultra ? 1.2 : compact ? 1.35 : 1.6),
+    );
+    const summaryLineHeight = px(
+      resume.fontSize * (4 / 3) * (ultra ? 1.22 : compact ? 1.35 : 1.55),
+    );
+    const horizontalPadding = ultra ? 30 : compact ? 37 : 43;
     const sideWidth = template === "sidebar" ? px(smart ? 130 : 141) : 0;
     const contentX =
-      template === "sidebar" ? px(smart ? 158 : 171) : px(smart ? 37 : 43);
-    const rightPadding = px(smart ? 37 : 43);
+      template === "sidebar" ? px(smart ? 158 : 171) : px(horizontalPadding);
+    const rightPadding = px(horizontalPadding);
     const contentWidth = canvas.width - contentX - rightPadding;
-    let y = px(smart ? 31 : 38);
+    const verticalPadding = ultra ? 24 : compact ? 31 : 38;
+    let y = px(verticalPadding);
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.textBaseline = "top";
@@ -2784,7 +2995,7 @@ function Editor({
     }
 
     const setFont = (size: number, weight = 400) => {
-      context.font = `${weight} ${size}px Arial, "Microsoft YaHei", "PingFang SC", sans-serif`;
+      context.font = `${weight} ${size}px "Microsoft YaHei", "微软雅黑", "PingFang SC", Arial, sans-serif`;
     };
     const layoutFormattedLines = (
       value: string,
@@ -2850,11 +3061,11 @@ function Editor({
       return layoutFormattedLines(value, fontSize, 400, maxWidth).length;
     };
     const drawSectionHeading = (heading: string) => {
-      y += px(smart ? 8 : 11);
-      setFont(px(smart ? 9 : 10), 700);
+      y += px(ultra ? 4 : compact ? 8 : 11);
+      setFont(sectionHeadingFontSize, 800);
       context.fillStyle = accent;
       context.fillText(heading, contentX, y);
-      y += px(smart ? 19 : 22);
+      y += px(ultra ? 19 : compact ? 22 : 25);
       context.fillStyle = accent;
       context.fillRect(contentX, y - px(3), contentWidth, template === "azure" ? 3 : 2);
     };
@@ -2864,30 +3075,30 @@ function Editor({
       period: string,
       description: string,
     ) => {
-      setFont(px(smart ? 7.8 : 8.3), 700);
+      setFont(bodyFontSize, 700);
       context.fillStyle = "#161916";
       context.fillText(title || "待填写", contentX, y);
-      setFont(px(7), 400);
+      setFont(bodyFontSize, 400);
       const periodWidth = context.measureText(period).width;
       context.fillText(period, contentX + contentWidth - periodWidth, y);
-      y += px(13);
+      y += bodyFontSize * 1.3;
       if (subtitle) {
         drawWrapped(
           subtitle,
-          px(smart ? 7 : 7.4),
+          bodyFontSize,
           700,
           "#161916",
-          px(11),
+          bodyLineHeight,
         );
       }
       if (description) {
         y += px(1);
         drawWrapped(
           description,
-          px(smart ? 7 : 7.5),
+          bodyFontSize,
           400,
           "#252b27",
-          px(smart ? 10.4 : 12),
+          bodyLineHeight,
         );
       }
       y += px(3);
@@ -2899,16 +3110,16 @@ function Editor({
       context.fillRect(0, 0, canvas.width, headerHeight);
       y = px(smart ? 25 : 30);
     }
-    setFont(px(smart ? 21 : 23), 500);
+    setFont(px(23), 500);
     context.fillStyle = template === "azure" ? "#ffffff" : "#161916";
     context.fillText(resume.basic.name || "你的姓名", contentX, y);
-    y += px(smart ? 31 : 34);
+    y += px(34);
     drawWrapped(
       resume.basic.target || resume.target,
-      px(10),
+      bodyFontSize,
       700,
       template === "azure" ? "#d4e0ec" : "#39594a",
-      px(16),
+      bodyLineHeight,
     );
     if (template !== "sidebar") {
       y += px(1);
@@ -2916,27 +3127,30 @@ function Editor({
         [resume.basic.phone, resume.basic.email, resume.basic.city]
           .filter(Boolean)
           .join("  |  "),
-        px(7.5),
+        bodyFontSize,
         400,
         template === "azure" ? "#d4e0ec" : "#545d58",
-        px(13),
+        bodyLineHeight,
       );
     } else {
       let sideY = px(130);
-      setFont(px(7.2), 400);
+      setFont(bodyFontSize, 400);
       context.fillStyle = "#e0eee7";
       [resume.basic.phone, resume.basic.email, resume.basic.city]
         .filter(Boolean)
         .forEach((line) => {
           context.fillText(line, px(13), sideY);
-          sideY += px(17);
+          sideY += bodyLineHeight;
         });
     }
     const avatarX =
       template === "sidebar"
         ? px(30)
         : canvas.width - rightPadding - px(53);
-    const avatarY = template === "azure" ? px(smart ? 25 : 30) : px(smart ? 31 : 38);
+    const avatarY =
+      template === "azure"
+        ? px(ultra ? 20 : compact ? 25 : 30)
+        : px(verticalPadding);
     const avatarWidth = px(template === "sidebar" ? 70 : 53);
     const avatarHeight = px(template === "sidebar" ? 70 : 63);
     context.fillStyle = "#e8d3c2";
@@ -2992,12 +3206,11 @@ function Editor({
         avatarY + (avatarHeight - px(20)) / 2,
       );
     }
-    if (template === "azure") y = px(smart ? 127 : 132);
-    else y += px(smart ? 6 : 8);
+    if (template === "azure") y = px(ultra ? 123 : compact ? 127 : 132);
+    else y += px(ultra ? 4 : compact ? 6 : 8);
     if (resume.basic.summary.trim()) {
       const summaryStart = y;
-      const summaryFont = px(smart ? 7 : 7.5);
-      const summaryLineHeight = px(smart ? 10.2 : 11.6);
+      const summaryFont = bodyFontSize;
       const summaryTextWidth = contentWidth - px(18);
       setFont(summaryFont, 400);
       const summaryLines = countWrappedLines(
@@ -3055,6 +3268,17 @@ function Editor({
           );
           return;
         }
+        if (key === "campus") {
+          resume.campusExperiences.forEach((item) =>
+            drawEntry(
+              item.department,
+              "",
+              item.period,
+              item.description,
+            ),
+          );
+          return;
+        }
         const text = isStandardModuleKey(key)
           ? key === "skills"
             ? resume.skills
@@ -3062,15 +3286,17 @@ function Editor({
               ? resume.certificate
               : key === "evaluation"
                 ? resume.evaluation
-                : resume.portfolio
+                : key === "portfolio"
+                  ? resume.portfolio
+                  : ""
           : resume.customModules.find((item) => item.id === key)?.content || "";
         y += px(3);
         drawWrapped(
           text || "暂未填写",
-          px(smart ? 7 : 7.5),
+          bodyFontSize,
           400,
           "#252b27",
-          px(smart ? 10.4 : 12),
+          bodyLineHeight,
         );
       });
     return canvas;
@@ -3152,11 +3378,29 @@ function Editor({
             className={smartOnePage ? "one-page-toggle active" : "one-page-toggle"}
             onClick={toggleSmartOnePage}
             aria-pressed={smartOnePage}
-            title="自动调整页边距、字号和模块间距，优先保持一页"
+            title="自动调整页边距、行距和模块间距，优先保持一页"
           >
             <span>{smartOnePage ? "✓" : "1"}</span>
             智能一页
           </button>
+          <label className="font-size-control">
+            <span>正文字号</span>
+            <select
+              aria-label="简历正文字号"
+              value={resume.fontSize}
+              onChange={(event) =>
+                updateCurrent({
+                  fontSize: Number(event.target.value) as ResumeFontSize,
+                })
+              }
+            >
+              {[6, 7, 8, 9, 10, 12].map((size) => (
+                <option key={size} value={size}>
+                  {size}pt
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="template-switch">
             <span>模板</span>
             <button
@@ -3396,8 +3640,7 @@ function Editor({
               resume={resume}
               template={template}
               paperRef={paperRef}
-              smartOnePage={smartOnePage}
-              ultraCompact={smartOnePage && compactLayout}
+              density={density}
               pageCount={pageCount}
             />
             <div className="paper-status">
@@ -3405,8 +3648,12 @@ function Editor({
               <span>
                 {smartOnePage
                   ? fitsOnePage
-                    ? "✓ 智能一页适配完成"
-                    : `内容较多，已自动扩展为 ${pageCount} 页`
+                    ? density === "normal"
+                      ? "✓ 内容自然适配一页"
+                      : density === "compact"
+                        ? "✓ 已适度压缩为一页"
+                        : "✓ 已最大压缩为一页"
+                    : `内容较多，保持可读排版，共 ${pageCount} 页`
                   : pageCount === 1
                     ? "A4 标准排版"
                     : `内容较多，已自动扩展为 ${pageCount} 页`}
@@ -3441,21 +3688,21 @@ function ModuleForm({
     value: string,
   ) => void;
   updateEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     patch: Record<string, string>,
   ) => void;
-  addEntry: (collection: "experiences" | "educations" | "projects") => void;
+  addEntry: (collection: EntryCollection) => void;
   duplicateEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => void;
   deleteEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
   ) => void;
   moveEntry: (
-    collection: "experiences" | "educations" | "projects",
+    collection: EntryCollection,
     id: string,
     direction: -1 | 1,
   ) => void;
@@ -3668,6 +3915,67 @@ function ModuleForm({
     );
   }
 
+  if (activeModule === "campus") {
+    return (
+      <div className="form-stack">
+        {resume.campusExperiences.map((entry, index) => (
+          <div className="entry-block" key={entry.id}>
+            <EntryToolbar
+              label={`校园经历 ${String(index + 1).padStart(2, "0")}`}
+              index={index}
+              total={resume.campusExperiences.length}
+              duplicate={() => duplicateEntry("campusExperiences", entry.id)}
+              remove={() => deleteEntry("campusExperiences", entry.id)}
+              move={(direction) =>
+                moveEntry("campusExperiences", entry.id, direction)
+              }
+            />
+            <div className="form-card">
+              <div className="form-grid two">
+                <Field
+                  label="部门"
+                  value={entry.department}
+                  onChange={(value) =>
+                    updateEntry("campusExperiences", entry.id, {
+                      department: value,
+                    })
+                  }
+                />
+                <Field
+                  label="时间"
+                  value={entry.period}
+                  onChange={(value) =>
+                    updateEntry("campusExperiences", entry.id, {
+                      period: value,
+                    })
+                  }
+                />
+              </div>
+              <TextField
+                label="具体内容"
+                value={entry.description}
+                onChange={(value) =>
+                  updateEntry("campusExperiences", entry.id, {
+                    description: value,
+                  })
+                }
+                rows={6}
+              />
+              <SmartHint />
+            </div>
+          </div>
+        ))}
+        <button
+          className="add-entry"
+          onClick={() => addEntry("campusExperiences")}
+        >
+          ＋ 添加一段校园经历
+        </button>
+        <TruthNotice />
+      </div>
+    );
+  }
+
   if (!isStandardModuleKey(activeModule)) {
     const customModule = resume.customModules.find(
       (item) => item.id === activeModule,
@@ -3700,7 +4008,10 @@ function ModuleForm({
   }
 
   const simpleMap: Record<
-    Exclude<StandardModuleKey, "basic" | "experience" | "education" | "project">,
+    Exclude<
+      StandardModuleKey,
+      "basic" | "experience" | "education" | "project" | "campus"
+    >,
     { label: string; hint: string; field: keyof Resume }
   > = {
     skills: {
@@ -3778,15 +4089,13 @@ function ResumePreview({
   resume,
   template,
   paperRef,
-  smartOnePage,
-  ultraCompact,
+  density,
   pageCount,
 }: {
   resume: Resume;
   template: Template;
   paperRef: RefObject<HTMLElement | null>;
-  smartOnePage: boolean;
-  ultraCompact: boolean;
+  density: ResumeDensity;
   pageCount: number;
 }) {
   const visible = useMemo(
@@ -3796,8 +4105,13 @@ function ResumePreview({
   return (
     <article
       ref={paperRef}
-      className={`resume-paper template-${template}${smartOnePage ? " smart-one-page" : ""}${ultraCompact ? " ultra-compact" : ""}`}
-      style={{ "--resume-pages": pageCount } as React.CSSProperties}
+      className={`resume-paper template-${template}${density !== "normal" ? " smart-one-page" : ""}${density === "ultra" ? " ultra-compact" : ""}`}
+      style={
+        {
+          "--resume-pages": pageCount,
+          "--resume-body-font-size": `${resume.fontSize}pt`,
+        } as React.CSSProperties
+      }
     >
       {Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => (
         <span
@@ -3873,6 +4187,16 @@ function ResumePreview({
                     text={entry.description}
                   />
                 ))}
+              {key === "campus" &&
+                resume.campusExperiences.map((entry) => (
+                  <PaperEntry
+                    key={entry.id}
+                    title={entry.department}
+                    subtitle=""
+                    period={entry.period}
+                    text={entry.description}
+                  />
+                ))}
               {key === "skills" && <p data-pagination-block><FormattedText value={resume.skills || "暂未填写"} /></p>}
               {key === "certificate" && <p data-pagination-block><FormattedText value={resume.certificate || "暂未填写"} /></p>}
               {key === "evaluation" && <p data-pagination-block><FormattedText value={resume.evaluation || "暂未填写"} /></p>}
@@ -3906,13 +4230,17 @@ function PaperEntry({
   text: string;
 }) {
   return (
-    <div className="paper-entry" data-pagination-block>
-      <div className="paper-entry-head">
-        <strong>{title || "待填写"}</strong>
-        <span>{period}</span>
+    <div className="paper-entry">
+      <div data-pagination-block data-pagination-kind="entry-head">
+        <div className="paper-entry-head">
+          <strong>{title || "待填写"}</strong>
+          <span>{period}</span>
+        </div>
+        {subtitle && <b>{subtitle}</b>}
       </div>
-      {subtitle && <b>{subtitle}</b>}
-      <p><FormattedText value={text} /></p>
+      <p data-pagination-block data-pagination-kind="entry-body">
+        <FormattedText value={text} />
+      </p>
     </div>
   );
 }

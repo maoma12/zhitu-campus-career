@@ -1218,6 +1218,30 @@ select:focus-visible {
   box-shadow: 0 2px 8px rgba(38, 58, 48, 0.09);
 }
 
+.font-size-control {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: #fff;
+  padding: 0 8px;
+  color: #68766e;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.font-size-control select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .one-page-toggle {
   display: flex;
   min-height: 34px;
@@ -1996,6 +2020,7 @@ select:focus-visible {
 .resume-paper {
   --a4-page-height: 862.714px;
   --resume-pages: 1;
+  --resume-body-font-size: 9pt;
   position: relative;
   width: min(100%, 610px);
   min-height: calc(var(--a4-page-height) * var(--resume-pages));
@@ -2003,9 +2028,10 @@ select:focus-visible {
   margin: 0 auto;
   background: #fff;
   color: #161916;
-  padding: 38px 43px;
+  padding: 38px 43px 19px;
   box-shadow: 0 14px 40px rgba(36, 50, 42, 0.17);
-  font-family: Arial, "PingFang SC", sans-serif;
+  font-family: "Microsoft YaHei", "微软雅黑", "PingFang SC", Arial, sans-serif;
+  font-size: var(--resume-body-font-size);
 }
 
 .paper-page-break {
@@ -2024,7 +2050,7 @@ select:focus-visible {
 }
 
 .resume-paper.smart-one-page {
-  padding: 31px 37px;
+  padding: 31px 37px 15.5px;
 }
 
 .resume-paper.smart-one-page .paper-header {
@@ -2032,14 +2058,13 @@ select:focus-visible {
 }
 
 .resume-paper.smart-one-page .paper-identity h1 {
-  font-size: 21px;
+  letter-spacing: 0.06em;
 }
 
 .resume-paper.smart-one-page .paper-summary {
   margin-bottom: 8px;
   padding: 6px 9px;
-  font-size: 7px;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 
 .resume-paper.smart-one-page .paper-section {
@@ -2049,36 +2074,41 @@ select:focus-visible {
 .resume-paper.smart-one-page .paper-section h2 {
   margin-bottom: 5px;
   padding-bottom: 3px;
-  font-size: 9px;
 }
 
 .resume-paper.smart-one-page .paper-section > p,
 .resume-paper.smart-one-page .paper-entry p {
   margin-top: 3px;
-  font-size: 7px;
-  line-height: 1.48;
-}
-
-.resume-paper.smart-one-page .paper-entry-head strong {
-  font-size: 7.8px;
-}
-
-.resume-paper.smart-one-page .paper-entry > b {
-  font-size: 7px;
+  line-height: 1.35;
 }
 
 .resume-paper.smart-one-page.ultra-compact {
-  padding: 27px 34px;
+  padding: 24px 30px 12px;
+}
+
+.resume-paper.smart-one-page.ultra-compact .paper-header {
+  padding-bottom: 4px;
+}
+
+.resume-paper.smart-one-page.ultra-compact .paper-summary {
+  margin-bottom: 5px;
+  padding: 4px 7px;
+  line-height: 1.22;
 }
 
 .resume-paper.smart-one-page.ultra-compact .paper-section {
-  margin-top: 6px;
+  margin-top: 4px;
+}
+
+.resume-paper.smart-one-page.ultra-compact .paper-section h2 {
+  margin-bottom: 3px;
+  padding-bottom: 2px;
 }
 
 .resume-paper.smart-one-page.ultra-compact .paper-section > p,
 .resume-paper.smart-one-page.ultra-compact .paper-entry p {
-  font-size: 6.6px;
-  line-height: 1.38;
+  margin-top: 1px;
+  line-height: 1.2;
 }
 
 .paper-header {
@@ -2098,7 +2128,7 @@ select:focus-visible {
 .paper-identity > p {
   margin: 7px 0 0;
   color: #39594a;
-  font-size: 10px;
+  font-size: var(--resume-body-font-size);
   font-weight: 700;
 }
 
@@ -2108,7 +2138,7 @@ select:focus-visible {
   gap: 0;
   margin-top: 9px;
   color: #545d58;
-  font-size: 7.5px;
+  font-size: var(--resume-body-font-size);
 }
 
 .paper-identity > div span + span::before {
@@ -2143,7 +2173,7 @@ select:focus-visible {
   background: #f1f6f3;
   padding: 8px 10px;
   color: #48534d;
-  font-size: 7.5px;
+  font-size: var(--resume-body-font-size);
   line-height: 1.55;
 }
 
@@ -2155,18 +2185,23 @@ select:focus-visible {
   margin: 0 0 7px;
   border-bottom: 1px solid #1e2722;
   padding-bottom: 4px;
-  font-size: 10px;
+  font-size: 10.5pt;
+  font-weight: 800;
   letter-spacing: 0.04em;
+  break-after: avoid-page;
+  page-break-after: avoid;
 }
 
 .paper-section > p,
 .paper-entry p {
   margin: 4px 0 0;
-  font-size: 7.5px;
+  font-size: var(--resume-body-font-size);
   line-height: 1.6;
-  text-align: justify;
+  text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  orphans: 2;
+  widows: 2;
 }
 
 .paper-section strong,
@@ -2188,18 +2223,23 @@ select:focus-visible {
 }
 
 .paper-entry-head strong {
-  font-size: 8.3px;
+  font-size: var(--resume-body-font-size);
 }
 
 .paper-entry-head span {
-  font-size: 7px;
+  font-size: var(--resume-body-font-size);
   white-space: nowrap;
 }
 
-.paper-entry > b {
+.paper-entry > [data-pagination-kind="entry-head"] > b {
   display: block;
   margin-top: 3px;
-  font-size: 7.4px;
+  font-size: var(--resume-body-font-size);
+}
+
+.paper-entry > [data-pagination-kind="entry-head"] {
+  break-after: avoid-page;
+  page-break-after: avoid;
 }
 
 .section-project .paper-entry > p {
@@ -2293,6 +2333,11 @@ select:focus-visible {
 .template-azure.smart-one-page .paper-header {
   margin: -31px -37px 0;
   padding: 25px 37px 16px;
+}
+
+.template-azure.smart-one-page.ultra-compact .paper-header {
+  margin: -24px -30px 0;
+  padding: 20px 30px 12px;
 }
 
 .template-sidebar.smart-one-page .paper-avatar {
