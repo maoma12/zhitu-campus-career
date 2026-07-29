@@ -3323,9 +3323,18 @@ function Editor({
     document.getElementById("resume-print-root")?.remove();
     const printRoot = document.createElement("div");
     printRoot.id = "resume-print-root";
-    const printPaper = sourcePaper.cloneNode(true) as HTMLElement;
-    printPaper.style.setProperty("--resume-pages", String(pageCount));
-    printRoot.appendChild(printPaper);
+    Array.from({ length: Math.max(1, pageCount) }, (_, pageIndex) => {
+      const printPage = document.createElement("div");
+      printPage.className = "resume-print-page";
+      const printViewport = document.createElement("div");
+      printViewport.className = "resume-print-page-viewport";
+      const printPaper = sourcePaper.cloneNode(true) as HTMLElement;
+      printPaper.style.setProperty("--resume-pages", String(pageCount));
+      printPaper.style.setProperty("--print-page-index", String(pageIndex));
+      printViewport.appendChild(printPaper);
+      printPage.appendChild(printViewport);
+      printRoot.appendChild(printPage);
+    });
     document.body.appendChild(printRoot);
     document.body.classList.add("printing-resume");
     const cleanup = () => {

@@ -4062,15 +4062,38 @@ select:focus-visible {
     margin: 0;
   }
 
+  #resume-print-root .resume-print-page {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    break-after: page;
+  }
+
+  #resume-print-root .resume-print-page:last-child {
+    break-after: auto;
+  }
+
+  #resume-print-root .resume-print-page-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 610px;
+    height: 862.714px;
+    transform: scale(1.3012);
+    transform-origin: top left;
+  }
+
   #resume-print-root .resume-paper {
-    position: relative !important;
+    position: absolute !important;
+    top: calc(-862.714px * var(--print-page-index));
+    left: 0;
     width: 610px !important;
     min-height: calc(862.714px * var(--resume-pages)) !important;
     height: auto !important;
     margin: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
-    zoom: 1.30127;
   }
 
   #resume-print-root .paper-page-break {
