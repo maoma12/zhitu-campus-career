@@ -466,10 +466,734 @@ function buildRuleSuggestions(
       status: "pending",
       safe: true,
       applyTo: "experience",
-      targetId: experißß7êÚ$z{-®éÜj×’À¢—Ğ¢ÂöF—cà¢Âö6–FSà¢—Ğ ¢¶æÇ—¦–ærbb€¢Æ6–FR6Æ74æÖSÒ&æÇ—6—2ÖÆöF–ær#à¢Ç7â6Æ74æÖSÒ&&–r×7–ææW""óà¢Æƒ#îjÚ>YÊKªNXøjùNZûzèXènKˆâ¤CÂöƒ#à¢ÆF—b6Æ74æÖSÒ&ÆöF–ær×7FW2#à¢Ç7â6Æ74æÖSÒ&FöæR#î)É2hùXùn[)~KØŞX[>™JîŠøÓÂ÷7ãà¢Ç7ãîjùNZûzèXènŠøhÚî(
-cÂ÷7ãà¢Ç7ãîyIşh‰™Ú.Šù^™zîš)ƒÂ÷7ãà¢ÂöF—cà¢Âö6–FSà¢—Ğ ¢¶æÇ—6—5&VG’bb€¢Ç6V7F–öâ6Æ74æÖSÒ&æÇ—6—2×&W7VÇB#à¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ†W&ò#à¢ÆF—b6Æ74æÖSÒ'66÷&R×&–ær#à¢Ç7G&öæsç·&W7VÇBç66÷&WÓÂ÷7G&öæsà¢Ç7ãîXË˜XŞXˆcÂ÷7ãà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'66÷&R×7VÖÖ'’#à¢Ç7â6Æ74æÖSÒ&vööBÖ&FvR#à¢·&W7VÇBç66÷&RãÒsRò.XË˜XŞ[ªn‹è>š¹‚"¢&W7VÇBç66÷&RãÒSò.X[~ZH~˜:XˆnYû®z"¢.™ÈŠh˜xŞx+Š^XXR'Ğ¢Â÷7ãà¢Æƒ#î[{.jùNZû’·&W7VÇBæ¶W—v÷&G2æÆVæwF‡ÒKŠ®[)~KØŞX[>™JîŠøÓÂöƒ#à¢Çà¢·&W7VÇBæÖF6†VBæÆVæwF€¢òG·&W7VÇBæÖF6†VBæ¦ö–â‚.8"—Ò[{.YÊzèXènKŠŞKÙ>xë8& ¢¢.i¨.iÊ®YÊzèXènKŠŞh›îX‹iˆîzîXË˜XŞX[>™JîŠøŞ8"'Ğ¢·&W7VÇBæÖ—76–æræÆVæwF‚òG·&W7VÇBæÖ—76–æræ¦ö–â‚.8"—Ò[	®iÊ®KÙ>xë8&¢"'Ğ¢Â÷à¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'66÷&RÖFVÇF#à¢Ç7G&öæsç·&W7VÇBæÖ—76–æræÆVæwF‡ÓÂ÷7G&öæsà¢Ç7ãî[è^zîŠêN{Ë®ZKš“Â÷7ãà¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ'&W7VÇB×F'2#à¢µ°¢²&ÖF6‚"Â.XË˜XŞhª^Y¢%ÒÀ¢²&¶W—v÷&G2"Â$¤BŠz>ié%ÒÀ¢²&Gf–6R"Â.KÉXÉn[»®Šêâ%ÒÀ¢²&–çFW'f–Wr"Â.™Ú.Šù^XxnZHr%ÒÀ¢ÒæÖ‚…¶¶W’ÂÆ&VÅÒ’Óâ€¢Æ'WGFöà¢6Æ74æÖS×¶æÇ—6—5F"ÓÓÒ¶W’ò&7F—fR"¢"'Ğ¢öä6Æ–6³×²‚’Óâ6WDæÇ—6—5F"†¶W’—Ğ¢¶W“×¶¶W—Ğ¢à¢¶Æ&VÇĞ¢¶¶W’ÓÓÒ&Gf–6R"bbÇ7ãç·7VvvW7F–öä6÷VçGÓÂ÷7ãçĞ¢Âö'WGFöãà¢’—Ğ¢ÂöF—cà ¢¶æÇ—6—5F"ÓÓÒ&ÖF6‚"bbÄÖF6…&W÷'BæÇ—6—3×·&W7VÇGÒ7VvvW7F–öä6÷VçC×·7VvvW7F–öä6÷VçGÒvô÷F–Ö—¦S×¶vô÷F–Ö—¦WÒóçĞ¢¶æÇ—6—5F"ÓÓÒ&¶W—v÷&G2"bbÄ¶W—v÷&E&W÷'BæÇ—6—3×·&W7VÇGÒóçĞ¢¶æÇ—6—5F"ÓÓÒ&Gf–6R"bbÄGf–6U&W÷'B7VvvW7F–öç3×·7VvvW7F–öç7Òvô÷F–Ö—¦S×¶vô÷F–Ö—¦WÒóçĞ¢¶æÇ—6—5F"ÓÓÒ&–çFW'f–Wr"bbÄ–çFW'f–Wu&W÷'BVW7F–öç3×·&W7VÇBçVW7F–öç7ÒóçĞ¢Â÷6V7F–öãà¢—Ğ¢ÂöF—cà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâÖF6…&W÷'B‡°¢æÇ—6—2À¢7VvvW7F–öä6÷VçBÀ¢vô÷F–Ö—¦RÀ§Ó¢°¢æÇ—6—3¢¤DæÇ—6—5&W7VÇC°¢7VvvW7F–öä6÷VçC¢çVÖ&W#°¢vô÷F–Ö—¦S¢‚’Óâfö–C°§Ò’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ6öçFVçB#à¢ÆF—b6Æ74æÖSÒ&'&V¶F÷vâÖw&–B#à¢µ°¢².X[>™JîŠøŞŠhny¹b"ÂæÇ—6—2ç66÷&RÂG¶æÇ—6—2æÖF6†VBæÆVæwF‡ÒòG¶æÇ—6—2æ¶W—v÷&G2æÆVæwF‡ÒKŠ®X[>™JîŠøŞ[{.iÈKÙ>xëÒÀ¢².[)~KØŞ{Ë®ZKš’"ÂÖF‚æÖ‚ƒÂÒæÇ—6—2ç66÷&R’ÂG¶æÇ—6—2æÖ—76–æræÆVæwF‡ÒšŠhk.[	®iÊ®YÊzèXènKŠŞKÙ>xëÒÀ¢².h‰iéÎŠ‹ëâ"ÂcÂ.Šû~K«®[z^j8iú^iŠşY
-nXÈ^Y
-¾Xúşš¨ÎŠøy¨NXªKÙÎKˆî{¹>iéÂ%ÒÀ¢².K¨¾ZéîZèXZ‚"ÂÂ.ŠxNX‰XˆniéKˆŞKÉ®Y	zèXènk{¾XªKˆŞZÙYÊy¨NKúhò%ÒÀ¢ÒæÖ‚…¶Æ&VÂÂ66÷&RÂæ÷FUÒ’Óâ€¢ÆF—b6Æ74æÖSÒ&'&V¶F÷vâÖ6&B"¶W“×µ7G&–ær†Æ&VÂ—Óà¢ÆF—cãÇ7G&öæsç¶Æ&VÇÓÂ÷7G&öæsãÇ7ãç·66÷&WÓÂ÷7ããÂöF—cà¢Æ“ãÆ"7G–ÆS×·²v–GFƒ¢G·66÷&WÒV×ÒóãÂö“à¢Çç¶æ÷FWÓÂ÷à¢ÂöF—cà¢’—Ğ¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&Wf–FVæ6RÖw&–B#à¢Ç6V7F–öâ6Æ74æÖSÒ&Wf–FVæ6RÖ6&B7G&VæwF‚#à¢ÆF—b6Æ74æÖSÒ&Wf–FVæ6RÖ†VB#à¢Ç7ãî)É3Â÷7ãà¢ÆF—cãÆƒ3îzèXènKÉX«óÂöƒ3ãÇç¶æÇ—6—2æÖF6†VBæÆVæwF‡ÒšŠhk.[{.iÈih~ZÙ~ŠøhÚãÂ÷ãÂöF—cà¢ÂöF—cà¢²†æÇ—6—2æÖF6†VBæÆVæwF‚òæÇ—6—2æÖF6†VB¢².i¨.iziˆîzîXË˜XŞš’%Ò’æÖ‚‡F—FÆR’Óâ€¢ÆF—b6Æ74æÖSÒ&Wf–FVæ6R×&÷r"¶W“×·F—FÆWÓà¢Ç7G&öæsç·F—FÆWÓÂ÷7G&öæsãÇîzèXènjÚ>ih~KŠŞj8kX¾X‹Zû[©NX[>™JîŠøÓÂ÷ãÆVÓî[{.XË˜XÓÂöVÓà¢ÂöF—cà¢’—Ğ¢Â÷6V7F–öãà¢Ç6V7F–öâ6Æ74æÖSÒ&Wf–FVæ6RÖ6&Bv#à¢ÆF—b6Æ74æÖSÒ&Wf–FVæ6RÖ†VB#à¢Ç7ãâÂ÷7ãà¢ÆF—cãÆƒ3îi¨.iÊ®KÙ>xëÂöƒ3ãÇîKˆŞiŠşˆ;ŞX©¾{¹>Šë®ûÈÎXú®Kº>ŠzèXènizŠøhÚãÂ÷ãÂöF—cà¢ÂöF—cà¢²†æÇ—6—2æÖ—76–æræÆVæwF‚òæÇ—6—2æÖ—76–ær¢².iz%Ò’æÖ‚‡F—FÆR’Óâ€¢ÆF—b6Æ74æÖSÒ&Wf–FVæ6R×&÷r"¶W“×·F—FÆWÓà¢Ç7G&öæsç·F—FÆWÓÂ÷7G&öæsãÇä¤BKŠŞX{®xëûÈÎKØnzèXènjÚ>ih~iÊ®j8kX¾X‹Â÷ãÆVÓî[è^zîŠêCÂöVÓà¢ÂöF—cà¢’—Ğ¢Â÷6V7F–öãà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ7F#à¢ÆF—cãÇ7G&öæsî[{.yIşh‰·7VvvW7F–öä6÷VçGÒiÚŠxNX‰[»®ŠêãÂ÷7G&öæsãÇ7ãî{Ë®ZKh¨ˆ;ŞKˆŞKÉ®ˆz®XªXiXZ^zèXècÂ÷7ããÂöF—cà¢Æ'WGFöâ6Æ74æÖSÒ&'Fâ&–Ö'’"öä6Æ–6³×¶vô÷F–Ö—¦WÓîiú^yÈ¾KÉXÉnZûjùB(i#Âö'WGFöãà¢ÂöF—cà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâ¶W—v÷&E&W÷'B‡²æÇ—6—2Ó¢²æÇ—6—3¢¤DæÇ—6—5&W7VÇBÒ’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ6öçFVçB¶W—v÷&BÖ6öçFVçB#à¢Ç6V7F–öãà¢Æƒ3îzÎh
-~Šhk#Âöƒ3à¢ÆF—b6Æ74æÖSÒ&¶W—v÷&BÖ6Æ÷VB#à¢²†æÇ—6—2æ¶W—v÷&G2æÆVæwF‚òæÇ—6—2æ¶W—v÷&G2¢².i¨.iÊ®ŠønXŠ¾X‹[‹Šxh¨iÊşX[>™JîŠøÒ%Ò’æÖ€¢†¶W—v÷&B’Óâ€¢Ç7â6Æ74æÖS×¶æÇ—6—2æÖF6†VBæ–æ6ÇVFW2†¶W—v÷&B’ò&ÖF6†VB"¢"'Ò¶W“×¶¶W—v÷&GÓà¢¶æÇ—6—2æÖF6†VBæ–æ6ÇVFW2†¶W—v÷&B’ò.)É2"¢"'×¶¶W—v÷&GĞ¢Â÷7ãà¢’À¢—Ğ¢ÂöF—cà¢Â÷6V7F–öãà¢Ç6V7F–öãà¢Æƒ3î‹Úşh
-~ˆ;ŞX©³Âöƒ3à¢ÆF—b6Æ74æÖSÒ&¶W—v÷&BÖ6Æ÷VB6ögB#à¢µ².k)ş˜	®XØşKÙÂ"Â.ZÚnKšˆ;ŞX©²"Â.™zîš)Zé®KØÒ"Â.™Èk.ynŠz2%ÒæÖ‚†¶W—v÷&B’Óâ€¢Ç7â¶W“×¶¶W—v÷&GÓç¶¶W—v÷&GÓÂ÷7ãà¢’—Ğ¢ÂöF—cà¢Â÷6V7F–öãà¢Ç6V7F–öâ6Æ74æÖSÒ&–çfÆ–BÖ6÷’#à¢Ç7ãîKØîzÙ¾˜K»~XÎhøş‹ûÂ÷7ãà¢Çî(	ÎX[~ZH~ˆšşZ[Şy¨Nk)ş˜	®ˆ;ŞX©¾Y(ÎZÚnKšˆ;ŞX©¾(	Ş[îK¨î˜	®yJhøş‹ûûÈÎ™ÈŠhyJ{¸şXènŠøhÚîiJşi)8#Â÷à¢Â÷6V7F–öãà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâGf–6U&W÷'B‡°¢7VvvW7F–öç2À¢vô÷F–Ö—¦RÀ§Ó¢°¢7VvvW7F–öç3¢7VvvW7F–öåµÓ°¢vô÷F–Ö—¦S¢‚’Óâfö–C°§Ò’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ6öçFVçB#à¢ÆF—b6Æ74æÖSÒ&Gf–6RÖÆ—7B#à¢·7VvvW7F–öç2æÖ‚‡7VvvW7F–öâÂ–æFW‚’Óâ€¢ÆF—b6Æ74æÖSÒ&Gf–6R×&÷r"¶W“×·7VvvW7F–öâæ–GÓà¢Ç7ãçµ7G&–ær†–æFW‚²’çE7F'Bƒ"Â#"—ÓÂ÷7ãà¢ÆF—cãÇ7G&öæsç·7VvvW7F–öâæ¶–æGÓÂ÷7G&öæsãÇç·7VvvW7F–öâæÖöGVÆWÒ+r·7VvvW7F–öâç&V6öçÓÂ÷ãÂöF—cà¢ÆVÓç·7VvvW7F–öâç6fRò.ZèXZ[»®Šêâ"¢.™ÈŠhzîŠêB'ÓÂöVÓà¢ÂöF—cà¢’—Ğ¢ÂöF—cà¢Æ'WGFöâ6Æ74æÖSÒ&'Fâ&–Ö'’v–FR"öä6Æ–6³×¶vô÷F–Ö—¦WÓî˜	iÚiú^yÈ¾KúîiKX˜ŞYãÂö'WGFöãà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâ–çFW'f–Wu&W÷'B‡°¢VW7F–öç2À§Ó¢°¢VW7F–öç3¢·7G&–ærÂ7G&–ærÂ7G&–æuÕµÓ°§Ò’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'&W7VÇBÖ6öçFVçB–çFW'f–WrÖÆ—7B#à¢·VW7F–öç2æÖ‚…·FrÂVW7F–öâÂ6÷W&6UÒÂ–æFW‚’Óâ€¢Æ'F–6ÆR¶W“×·VW7F–öçÓà¢Ç7ãç¶–æFW‚²ÓÂ÷7ãà¢ÆF—cãÆVÓç·FwÓÂöVÓãÆƒ3ç·VW7F–öçÓÂöƒ3ãÇç·6÷W&6WÓÂ÷ãÂöF—cà¢Æ'WGFöãîXxnZH~Šhx+’ûÈ³Âö'WGFöãà¢Âö'F–6ÆSà¢’—Ğ¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâ÷F–Ö—¦UvR‡°¢7VvvW7F–öç2À¢F&vWBÀ¢6VÆV7FVBÀ¢6WE6VÆV7FVBÀ¢WFFU7VvvW7F–öâÀ¢6fRÀ¢&6²À§Ó¢°¢7VvvW7F–öç3¢7VvvW7F–öåµÓ°¢F&vWC¢7G&–æs°¢6VÆV7FVC¢çVÖ&W#°¢6WE6VÆV7FVC¢†–C¢çVÖ&W"’Óâfö–C°¢WFFU7VvvW7F–öã¢†–C¢çVÖ&W"Â7FGW3¢7VvvW7F–öå²'7FGW2%Ò’Óâfö–C°¢6fS¢‚’Óâfö–C°¢&6³¢‚’Óâfö–C°§Ò’°¢6öç7B—FVÒÒ7VvvW7F–öç2æf–æB‚‡7VvvW7F–öâ’Óâ7VvvW7F–öâæ–BÓÓÒ6VÆV7FVB’óò7VvvW7F–öç5³Ó°¢6öç7B66WFVBÒ7VvvW7F–öç2æf–ÇFW"‚‡7VvvW7F–öâ’Óâ7VvvW7F–öâç7FGW2ÓÓÒ&66WFVB"’æÆVæwFƒ°¢6öç7BFV6–FVBÒ7VvvW7F–öç2æf–ÇFW"‚‡7VvvW7F–öâ’Óâ7VvvW7F–öâç7FGW2ÓÒ'VæF–ær"’æÆVæwFƒ°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ&÷F–Ö—¦R×vR#à¢Æ†VFW"6Æ74æÖSÒ&÷F–Ö—¦R×F÷&"#à¢ÆF—cà¢Æ'WGFöâöä6Æ–6³×¶&6·Óî(i‹ùNY¹îXˆniéÂö'WGFöãà¢ÆF—cà¢Ç6Æ74æÖSÒ&W–V'&÷r#îŠxNX‰KÉXÉnZûjùCÂ÷à¢Æƒç·F&vWGÒ+r¤BZé®Y	KÉXÉcÂöƒà¢ÂöF—cà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&FV6—6–öâ×&öw&W72#à¢Ç7ãç¶FV6–FVGÒò·7VvvW7F–öç2æÆVæwF‡Ò[{.ZHNycÂ÷7ãà¢Æ“ãÆ"7G–ÆS×·²v–GFƒ¢G²†FV6–FVBò7VvvW7F–öç2æÆVæwF‚’¢ÒV×ÒóãÂö“à¢ÂöF—cà¢Æ'WGFöâ6Æ74æÖSÒ&'Fâ&–Ö'’"öä6Æ–6³×·6fWÓîKùŞZÙK‹®ikx˜iÊÃÂö'WGFöãà¢Âö†VFW#à ¢ÆF—b6Æ74æÖSÒ&÷F–Ö—¦R×v÷&·76R#à¢Æ6–FR6Æ74æÖSÒ'7VvvW7F–öâÖÆ—7B#à¢ÆF—b6Æ74æÖSÒ'7VvvW7F–öâÖÆ—7BÖ†VB#à¢ÆF—cãÇ7G&öæsîKúîiK[»®ŠêãÂ÷7G&öæsãÇ7ãç·7VvvW7F–öç2æÆVæwF‡ÓÂ÷7ããÂöF—cà¢Ç6ÖÆÃî˜	iÚzîŠêNYîXhŞKùŞZÙƒÂ÷6ÖÆÃà¢ÂöF—cà¢·7VvvW7F–öç2æÖ‚‡7VvvW7F–öâÂ–æFW‚’Óâ€¢Æ'WGFöà¢¶W“×·7VvvW7F–öâæ–GĞ¢6Æ74æÖS×·6VÆV7FVBÓÓÒ7VvvW7F–öâæ–Bò'7VvvW7F–öâÖæb7F—fR"¢'7VvvW7F–öâÖæb'Ğ¢öä6Æ–6³×²‚’Óâ6WE6VÆV7FVB‡7VvvW7F–öâæ–B—Ğ¢à¢Ç7â6Æ74æÖS×¶7FGW2ÖF÷BG·7VvvW7F–öâç7FGW7ÖÓç·7VvvW7F–öâç7FGW2ÓÓÒ&66WFVB"ò.)É2"¢7VvvW7F–öâç7FGW2ÓÓÒ'&V¦V7FVB"ò,9r"¢–æFW‚²ÓÂ÷7ãà¢ÆF—cãÇ7G&öæsç·7VvvW7F–öâæ¶–æGÓÂ÷7G&öæsãÇ6ÖÆÃç·7VvvW7F–öâæÖöGVÆWÒ+r·7VvvW7F–öâæ¶W—v÷&GÓÂ÷6ÖÆÃãÂöF—cà¢ÆVÓç·7VvvW7F–öâç6fRò.ZèXZ‚"¢.™ÈŠ^XXR'ÓÂöVÓà¢Âö'WGFöãà¢’—Ğ¢ÆF—b6Æ74æÖSÒ&f7BÖwV&B#à¢Ç7ãîK¨¾ZéîKùŞhªN[{.[ÈY
-óÂ÷7ãà¢ÇîikZ)îi[ZÙ~8h¨ˆ;Şh‰nh‰iéÎi{nûÈÎ[ø^š¾XXyKKÚŠ^XX^yÉşZéîKúhş8#Â÷à¢ÂöF—cà¢Âö6–FSà ¢Ç6V7F–öâ6Æ74æÖSÒ&6ö×&—6öâÖ&V#à¢ÆF—b6Æ74æÖSÒ&6ö×&—6öâÖ†VF–ær#à¢ÆF—cà¢Ç7â6Æ74æÖS×¶—FVÒç6fRò'6fRÖ&FvR"¢'v&æ–ærÖ&FvR'Óà¢¶—FVÒç6fRò.)É2K¨¾ZéîZèXZ‚"¢"™ÈŠhyÉşZéîKúhò'Ğ¢Â÷7ãà¢Æƒ#ç¶—FVÒæ¶–æGÓÂöƒ#à¢Çç¶—FVÒç&V6öçÓÂ÷à¢ÂöF—cà¢Ç7â6Æ74æÖSÒ&¶W—v÷&B×&VfW&Væ6R#îZû[©B¤NûÉ§¶—FVÒæ¶W—v÷&GÓÂ÷7ãà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ&6ö×&—6öâÖw&–B#à¢Æ'F–6ÆR6Æ74æÖSÒ&6ö×&RÖ6&B÷&–v–æÂ#à¢Æ†VFW#ãÇ7ãîKúîiKX˜ÓÂ÷7ããÆVÓîXéşZx¾zèXècÂöVÓãÂö†VFW#à¢ÆF—b6Æ74æÖSÒ&6ö×&RÖÖöGVÆRÖÆ&VÂ#ç¶—FVÒæÖöGVÆWÓÂöF—cà¢Çç¶—FVÒæ÷&–v–æÇÓÂ÷à¢Âö'F–6ÆSà¢Æ'F–6ÆR6Æ74æÖSÒ&6ö×&RÖ6&B÷F–Ö—¦VB#à¢Æ†VFW#ãÇ7ãîKúîiKYãÂ÷7ããÆVÓîŠxNX‰[»®Šêîš(NŠxƒÂöVÓãÂö†VFW#à¢ÆF—b6Æ74æÖSÒ&6ö×&RÖÖöGVÆRÖÆ&VÂ#ç¶—FVÒæÖöGVÆWÓÂöF—cà¢Çç¶—FVÒæ÷F–Ö—¦VGÓÂ÷à¢²—FVÒç6fRbb€¢ÆF—b6Æ74æÖSÒ'Vç6fRÖæ÷FR#î8	8	KŠŞy¨NXh^Zë[ø^š¾yKKÚZ¾XiûÈÎ[Ù>X˜Şx˜iÊÎKˆŞKÉ®XiXZ^zèXèn8#ÂöF—cà¢—Ğ¢Âö'F–6ÆSà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ&6†ævRÖW‡ÆæF–öâ#à¢Ç7ãîKúîiKŠûNiˆãÂ÷7ãà¢Çç¶—FVÒç&V6öçÓÂ÷à¢ÆF—cà¢ÆVÓîiÊ®KúîiKi{n™{CÂöVÓãÆVÓîiÊ®k{¾Xªh¨ˆ;ÓÂöVÓãÆVÓîiÊ®‰™®ièNh‰iéÃÂöVÓà¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ74æÖSÒ&FV6—6–öâÖ7F–öç2#à¢Æ'WGFöà¢6Æ74æÖS×¶—FVÒç7FGW2ÓÓÒ'&V¦V7FVB"ò'&V¦V7B7F—fR"¢'&V¦V7B'Ğ¢öä6Æ–6³×²‚’ÓâWFFU7VvvW7F–öâ†—FVÒæ–BÂ'&V¦V7FVB"—Ğ¢à¢9rKùŞyYXéşihp¢Âö'WGFöãà¢Ç7ãîKÚy¨N˜hºXúşKº^™¨şi{ni»NiK“Â÷7ãà¢Æ'WGFöà¢6Æ74æÖS×¶—FVÒç7FGW2ÓÓÒ&66WFVB"ò&66WB7F—fR"¢&66WB'Ğ¢öä6Æ–6³×²‚’ÓâWFFU7VvvW7F–öâ†—FVÒæ–BÂ&66WFVB"—Ğ¢F—6&ÆVC×²—FVÒç6fWĞ¢à¢)É2¶—FVÒç6fRò.hê^Xù~KúîiK’"¢.Š^XX^YîXúşhê^Xùr'Ğ¢Âö'WGFöãà¢ÂöF—cà¢Â÷6V7F–öãà ¢Æ6–FR6Æ74æÖSÒ&÷F–Ö—¦F–öâ×7VÖÖ'’#à¢Ç7â6Æ74æÖSÒ'æVÂÖ¶–6¶W"#îx˜iÊÎiŠhÂ÷7ãà¢Æƒ3î[Ù>X˜ŞXk>zÙcÂöƒ3à¢ÆF—b6Æ74æÖSÒ&FV6—6–öâ×7FB#à¢ÆF—cãÇ7G&öæsç¶66WFVGÓÂ÷7G&öæsãÇ7ãî[{.hê^XùsÂ÷7ããÂöF—cà¢ÆF—cãÇ7G&öæsç·7VvvW7F–öç2æf–ÇFW"‚‡2’Óâ2ç7FGW2ÓÓÒ'&V¦V7FVB"’æÆVæwF‡ÓÂ÷7G&öæsãÇ7ãî[{.h¹.{¹ÓÂ÷7ããÂöF—cà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ'7VÖÖ'’ÖF—f–FW""óà¢ÆƒCî[nKª~yIşy¨NXùXÉcÂöƒCà¢ÇVÃà¢ÆÆ“îy»X[>{¸şXènhé.[¨şi»Nkˆ^i›ÂöÆ“à¢ÆÆ“ä¦fòôõX[>™JîŠøŞi»Nz¨X{£ÂöÆ“à¢ÆÆ“îXéşZx¾x˜iÊÎZèÎi[NKùŞyY“ÂöÆ“à¢Â÷VÃà¢Æ'WGFöâ6Æ74æÖSÒ&'FâF&²v–FR"öä6Æ–6³×·6fWÓîZèÎh‰[›nKùŞZÙx˜iÊÃÂö'WGFöãà¢ÇîKùŞZÙYîXúş{º~{ºŞh˜¾Xª[êî‹3Â÷à¢Âö6–FSà¢ÂöF—cà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâf–VÆB‡°¢Æ&VÂÀ¢fÇVRÀ¢öä6†ævRÀ§Ó¢°¢Æ&VÃ¢7G&–æs°¢fÇVS¢7G&–æs°¢öä6†ævS¢‡fÇVS¢7G&–ær’Óâfö–C°§Ò’°¢&WGW&â€¢ÆÆ&VÂ6Æ74æÖSÒ&f–VÆB#à¢Ç7ãç¶Æ&VÇÓÂ÷7ãà¢Æ–çWBfÇVS×·fÇVWÒöä6†ævS×²†WfVçB’Óâöä6†ævR†WfVçBçF&vWBçfÇVR—Òóà¢ÂöÆ&VÃà¢“°§Ğ ¦gVæ7F–öâFW‡Df–VÆB‡°¢Æ&VÂÀ¢fÇVRÀ¢öä6†ævRÀ¢†–çBÀ¢&÷w2ÒBÀ§Ó¢°¢Æ&VÃ¢7G&–æs°¢fÇVS¢7G&–æs°¢öä6†ævS¢‡fÇVS¢7G&–ær’Óâfö–C°¢†–çCó¢7G&–æs°¢&÷w3ó¢çVÖ&W#°§Ò’°¢&WGW&â€¢ÆÆ&VÂ6Æ74æÖSÒ&f–VÆB#à¢Ç7ãç¶Æ&VÇÓÂ÷7ãà¢ÇFW‡F&V¢&÷w3×·&÷w7Ğ¢fÇVS×·fÇVWĞ¢öä6†ævS×²†WfVçB’Óâöä6†ævR†WfVçBçF&vWBçfÇVR—Ğ¢óà¢¶†–çBbbÇ6ÖÆÃç¶†–çGÓÂ÷6ÖÆÃçĞ¢ÂöÆ&VÃà¢“°§Ğ ¦gVæ7F–öâ6Ö'D†–çB‡²&ö¦V7BÒfÇ6RÓ¢²&ö¦V7Có¢&ööÆVâÒ’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'6Ö'BÖ†–çB#à¢Ç7â6Æ74æÖSÒ&†–çBÖ–6öâ#îhùzK£Â÷7ãà¢ÆF—cà¢Ç7G&öæsç·&ö¦V7Bò.‹ùjë^šyºî{¸şXèn‹ùXúşKº^i»NX[~KÙ2"¢.[»®ŠêîŠ^XX^Xúşš¨ÎŠøy¨NKúhò'ÓÂ÷7G&öæsà¢Çà¢·&ö¦V7@¢ò.KÚŠz>Xk>K¨nK¸K˜X[~KÙ>™zîš)ûÉşY:®K©¾˜:XˆnyKKÚxºÎz¸¾ZèÎh‰ûÉò ¢¢.KÛşyJK¨nK¸K˜[z^X[~ûÉşi[hÚîŠxNjŠZI®ZJ~ûÉşiÈ{¸Kª~yIşK¨nK¸K˜{¹>iéÎûÉò'Ğ¢Â÷à¢ÂöF—cà¢Æ'WGFöãîiú^yÈ¾Xik9SÂö'WGFöãà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâG'WF„æ÷F–6R‚’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ'G'WF‚Öæ÷F–6R#à¢Ç7ãîy»ãÂ÷7ãà¢ÇãÇ7G&öæsîyÉşZéîKúhşKùŞhªCÂ÷7G&öæsîXiKÙÎhùzK®Xú®Yû®K¨îKÚ[{.Z¾Xiy¨NXh^ZëûÈÎKˆŞKÉ®k{¾XªKˆŞZÙYÊy¨N{¸şXèn8h¨ˆ;Şh‰ni[hÚî8#Â÷à¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâÖöFÂ‡°¢F—FÆRÀ¢öä6Æ÷6RÀ¢6†–ÆG&VâÀ§Ó¢°¢F—FÆS¢7G&–æs°¢öä6Æ÷6S¢‚’Óâfö–C°¢6†–ÆG&Vã¢&V7Bå&V7DæöFS°§Ò’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ&ÖöFÂÖ&6¶G&÷"&öÆSÒ'&W6VçFF–öâ"öäÖ÷W6TF÷vã×¶öä6Æ÷6WÓà¢Ç6V7F–öà¢6Æ74æÖSÒ&ÖöFÂ ¢&öÆSÒ&F–Æör ¢&–ÖÖöFÃÒ'G'VR ¢&–ÖÆ&VÃ×·F—FÆWĞ¢öäÖ÷W6TF÷vã×²†WfVçB’ÓâWfVçBç7F÷&÷vF–öâ‚—Ğ¢à¢Æ†VFW#ãÆƒ#ç·F—FÆWÓÂöƒ#ãÆ'WGFöâöä6Æ–6³×¶öä6Æ÷6WÓì9sÂö'WGFöããÂö†VFW#à¢¶6†–ÆG&VçĞ¢Â÷6V7F–öãà¢ÂöF—cà¢“°§Ğ
+      targetId: experience.id,
+    });
+  }
+
+  if (project?.description) {
+    suggestions.push({
+      id: suggestions.length + 1,
+      module: "é¡¹ç›®ç»å†",
+      kind: "è´¡çŒ®è¡¨è¾¾æ£€æŸ¥",
+      keyword: analysis.matched.find((item) =>
+        project.description.toLowerCase().includes(item.toLowerCase()),
+      ) ?? "é¡¹ç›®è´¡çŒ®",
+      original: project.description,
+      optimized: project.description,
+      reason: "å½“å‰è§„åˆ™æœªå‘ç°å¯å®‰å…¨è‡ªåŠ¨æ”¹å†™çš„å†…å®¹ï¼Œå»ºè®®äººå·¥ç¡®è®¤ä¸ªäººè´¡çŒ®å’Œç»“æœæ˜¯å¦æ¸…æ™°ã€‚",
+      status: "pending",
+      safe: true,
+      applyTo: "project",
+      targetId: project.id,
+    });
+  }
+
+  suggestions.push({
+    id: suggestions.length + 1,
+    module: "ç¼ºå¤±é¡¹",
+    kind: "éœ€è¦çœŸå®ä¿¡æ¯",
+    keyword: analysis.missing.slice(0, 3).join(" / ") || "é‡åŒ–ç»“æœ",
+    original: "ç®€å†å½“å‰æœªæä¾›å¯¹åº”è¯æ®ã€‚",
+    optimized: "å¦‚ä½ ç¡®å®å…·å¤‡ç›¸å…³ç»å†ï¼Œè¯·æ‰‹åŠ¨è¡¥å……çœŸå®åœºæ™¯ã€è¡ŒåŠ¨å’Œç»“æœã€‚",
+    reason: "è§„åˆ™ä¸ä¼šæŠŠ JD ä¸­çš„ç¼ºå¤±æŠ€èƒ½ç›´æ¥å†™å…¥ç®€å†ã€‚",
+    status: "pending",
+    safe: false,
+  });
+
+  return suggestions;
+}
+
+function storageTime() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+function cloneResume(resume: Resume): Resume {
+  return JSON.parse(JSON.stringify(resume)) as Resume;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function safeString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeModuleList(
+  value: unknown,
+  fallback: ModuleKey[],
+  customIds: CustomModuleKey[] = [],
+) {
+  if (!Array.isArray(value)) return [...fallback];
+  const allowed = new Set<ModuleKey>([...defaultOrder, ...customIds]);
+  const result = value.filter(
+    (item): item is ModuleKey =>
+      typeof item === "string" && allowed.has(item as ModuleKey),
+  );
+  return Array.from(new Set(result));
+}
+
+function normalizeResume(value: unknown): Resume {
+  const safeValue = isRecord(value) ? value : {};
+  const safeBasic = isRecord(safeValue.basic) ? safeValue.basic : {};
+  const legacyExperience = isRecord(safeValue.experience)
+    ? safeValue.experience
+    : null;
+  const legacyEducation = isRecord(safeValue.education)
+    ? safeValue.education
+    : null;
+  const legacyProject = isRecord(safeValue.project) ? safeValue.project : null;
+
+  const normalizeExperience = (item: unknown, index: number): Experience => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `experience-${Date.now()}-${index}`,
+      company: safeString(source.company),
+      role: safeString(source.role),
+      period: safeString(source.period),
+      description: safeString(source.description),
+    };
+  };
+  const normalizeEducation = (item: unknown, index: number): Education => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `education-${Date.now()}-${index}`,
+      school: safeString(source.school),
+      major: safeString(source.major),
+      degree: safeString(source.degree),
+      period: safeString(source.period),
+      detail: safeString(source.detail),
+    };
+  };
+  const normalizeProject = (item: unknown, index: number): Project => {
+    const source = isRecord(item) ? item : {};
+    return {
+      id: safeString(source.id) || `project-${Date.now()}-${index}`,
+      name: safeString(source.name),
+      role: safeString(source.role),
+      period: safeString(source.period),
+      stack: safeString(source.stack),
+      description: safeString(source.description),
+    };
+  };
+
+  const customModules: CustomModule[] = Array.isArray(safeValue.customModules)
+    ? safeValue.customModules
+        .filter(isRecord)
+        .map((item, index) => {
+          const rawId = safeString(item.id);
+          const id = (
+            rawId.startsWith("custom:")
+              ? rawId
+              : `custom:${Date.now()}-${index}`
+          ) as CustomModuleKey;
+          return {
+            id,
+            title: safeString(item.title, `è‡ªå®šä¹‰æ¨¡å— ${index + 1}`),
+            content: safeString(item.content),
+          };
+        })
+    : [];
+  const customIds = customModules.map((item) => item.id);
+
+  const moduleOrder = normalizeModuleList(
+    safeValue.moduleOrder,
+    defaultOrder,
+    customIds,
+  );
+  defaultOrder.forEach((key) => {
+    if (!moduleOrder.includes(key)) moduleOrder.push(key);
+  });
+  customIds.forEach((key) => {
+    if (!moduleOrder.includes(key)) moduleOrder.push(key);
+  });
+  const rawLabels = isRecord(safeValue.moduleLabels)
+    ? safeValue.moduleLabels
+    : {};
+  const moduleLabels = Object.fromEntries(
+    defaultOrder
+      .map((key) => [key, safeString(rawLabels[key]).trim()] as coâ€¦29245 tokens truncatedâ€¦
+  setAnalysisTab,
+  goOptimize,
+}: {
+  resumes: Resume[];
+  currentId: string;
+  setCurrentId: (id: string) => void;
+  jdText: string;
+  setJdText: (value: string) => void;
+  analyzing: boolean;
+  analysisReady: boolean;
+  analysis: JDAnalysisResult | null;
+  suggestionCount: number;
+  suggestions: Suggestion[];
+  analyzeJD: () => void;
+  analysisTab: string;
+  setAnalysisTab: (value: string) => void;
+  goOptimize: () => void;
+}) {
+  const result = analysis ?? {
+    score: 0,
+    keywords: [],
+    matched: [],
+    missing: [],
+    questions: [],
+  };
+  return (
+    <div className="page jd-page">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">JD æœ¬åœ°è§„åˆ™åŒ¹é…</p>
+          <h1>çœ‹æ‡‚å²—ä½ï¼Œå†è°ƒæ•´ç®€å†</h1>
+          <p>ç³»ç»Ÿåªå¼•ç”¨ç®€å†ä¸­å·²æœ‰å†…å®¹ï¼Œæœªä½“ç°çš„èƒ½åŠ›ä¼šæ˜ç¡®æ ‡è®°ã€‚</p>
+        </div>
+        {analysisReady && (
+          <button className="btn primary" onClick={goOptimize}>
+            è¿›å…¥ä¼˜åŒ–å¯¹æ¯” â†’
+          </button>
+        )}
+      </header>
+
+      <div className={analysisReady ? "jd-layout has-result" : "jd-layout"}>
+        <section className="jd-input-card">
+          <div className="input-card-head">
+            <div>
+              <span className="step-number">1</span>
+              <div>
+                <strong>é€‰æ‹©åŒ¹é…ç®€å†</strong>
+                <small>å¯ä½¿ç”¨é»˜è®¤æˆ–å†å²ç‰ˆæœ¬</small>
+              </div>
+            </div>
+            <span className="local-badge">æœ¬åœ°è§„åˆ™å¤„ç†</span>
+          </div>
+          <select
+            value={currentId}
+            onChange={(event) => setCurrentId(event.target.value)}
+            aria-label="é€‰æ‹©ç®€å†"
+          >
+            {resumes.map((resume) => (
+              <option value={resume.id} key={resume.id}>
+                {resume.name} Â· V{resume.version}
+              </option>
+            ))}
+          </select>
+
+          <div className="input-card-head second">
+            <div>
+              <span className="step-number">2</span>
+              <div>
+                <strong>ç²˜è´´å²—ä½ JD</strong>
+                <small>å»ºè®®åŒ…å«å²—ä½èŒè´£ä¸ä»»èŒè¦æ±‚</small>
+              </div>
+            </div>
+            <span className="local-badge">è¯·ç²˜è´´æ–‡å­—</span>
+          </div>
+          <textarea
+            className="jd-textarea"
+            value={jdText}
+            onChange={(event) => setJdText(event.target.value)}
+          />
+          <div className="textarea-meta">
+            <span>{jdText.length} å­— Â· å†…å®¹å®Œæ•´</span>
+            <button onClick={() => setJdText(jdSample)}>å¡«å…¥ç¤ºä¾‹ JD</button>
+          </div>
+          <button className="analyze-button" onClick={analyzeJD} disabled={analyzing}>
+            {analyzing ? (
+              <>
+                <span className="spinner" /> æ­£åœ¨è¯†åˆ«å²—ä½é‡ç‚¹â€¦
+              </>
+            ) : (
+              "å¼€å§‹æœ¬åœ°åŒ¹é…"
+            )}
+          </button>
+          <p className="analysis-safety">ä¸è¿æ¥ä»»ä½• AI æœåŠ¡ï¼Œä¸ä¸Šä¼ ç®€å†æˆ– JDï¼›å»ºè®®ä»…åŸºäºå·²æœ‰æ–‡å­—å’Œé¢„è®¾è§„åˆ™ã€‚</p>
+        </section>
+
+        {!analysisReady && !analyzing && (
+          <aside className="analysis-placeholder">
+            <div className="placeholder-visual">
+              <span>JD</span>
+              <i />
+              <b>ç®€å†</b>
+            </div>
+            <h2>åˆ†æç»“æœå°†åœ¨è¿™é‡Œå±•å¼€</h2>
+            <p>ä½ å°†è·å¾—å²—ä½å…³é”®è¯ã€å››ç»´åŒ¹é…è¯„åˆ†ã€ä¼˜åŒ–å»ºè®®å’Œé¢è¯•é—®é¢˜ã€‚</p>
+            <div className="placeholder-list">
+              {["å²—ä½è¦æ±‚ç»“æ„åŒ–è§£æ", "ç®€å†è¯æ®é€é¡¹å¯¹åº”", "5â€“8 ä¸ªé¢è¯•å‡†å¤‡é—®é¢˜"].map(
+                (item) => (
+                  <span key={item}>âœ“ {item}</span>
+                ),
+              )}
+            </div>
+          </aside>
+        )}
+
+        {analyzing && (
+          <aside className="analysis-loading">
+            <span className="big-spinner" />
+            <h2>æ­£åœ¨äº¤å‰æ¯”å¯¹ç®€å†ä¸ JD</h2>
+            <div className="loading-steps">
+              <span className="done">âœ“ æå–å²—ä½å…³é”®è¯</span>
+              <span>æ¯”å¯¹ç®€å†è¯æ®â€¦</span>
+              <span>ç”Ÿæˆé¢è¯•é—®é¢˜</span>
+            </div>
+          </aside>
+        )}
+
+        {analysisReady && (
+          <section className="analysis-result">
+            <div className="result-hero">
+              <div className="score-ring">
+                <strong>{result.score}</strong>
+                <span>åŒ¹é…åˆ†</span>
+              </div>
+              <div className="score-summary">
+                <span className="good-badge">
+                  {result.score >= 75 ? "åŒ¹é…åº¦è¾ƒé«˜" : result.score >= 50 ? "å…·å¤‡éƒ¨åˆ†åŸºç¡€" : "éœ€è¦é‡ç‚¹è¡¥å……"}
+                </span>
+                <h2>å·²æ¯”å¯¹ {result.keywords.length} ä¸ªå²—ä½å…³é”®è¯</h2>
+                <p>
+                  {result.matched.length
+                    ? `${result.matched.join("ã€")} å·²åœ¨ç®€å†ä¸­ä½“ç°ã€‚`
+                    : "æš‚æœªåœ¨ç®€å†ä¸­æ‰¾åˆ°æ˜ç¡®åŒ¹é…å…³é”®è¯ã€‚"}
+                  {result.missing.length ? ` ${result.missing.join("ã€")} å°šæœªä½“ç°ã€‚` : ""}
+                </p>
+              </div>
+              <div className="score-delta">
+                <strong>{result.missing.length}</strong>
+                <span>å¾…ç¡®è®¤ç¼ºå¤±é¡¹</span>
+              </div>
+            </div>
+
+            <div className="result-tabs">
+              {[
+                ["match", "åŒ¹é…æŠ¥å‘Š"],
+                ["keywords", "JD è§£æ"],
+                ["advice", "ä¼˜åŒ–å»ºè®®"],
+                ["interview", "é¢è¯•å‡†å¤‡"],
+              ].map(([key, label]) => (
+                <button
+                  className={analysisTab === key ? "active" : ""}
+                  onClick={() => setAnalysisTab(key)}
+                  key={key}
+                >
+                  {label}
+                  {key === "advice" && <span>{suggestionCount}</span>}
+                </button>
+              ))}
+            </div>
+
+            {analysisTab === "match" && <MatchReport analysis={result} suggestionCount={suggestionCount} goOptimize={goOptimize} />}
+            {analysisTab === "keywords" && <KeywordReport analysis={result} />}
+            {analysisTab === "advice" && <AdviceReport suggestions={suggestions} goOptimize={goOptimize} />}
+            {analysisTab === "interview" && <InterviewReport questions={result.questions} />}
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MatchReport({
+  analysis,
+  suggestionCount,
+  goOptimize,
+}: {
+  analysis: JDAnalysisResult;
+  suggestionCount: number;
+  goOptimize: () => void;
+}) {
+  return (
+    <div className="result-content">
+      <div className="breakdown-grid">
+        {[
+          ["å…³é”®è¯è¦†ç›–", analysis.score, `${analysis.matched.length}/${analysis.keywords.length} ä¸ªå…³é”®è¯å·²æœ‰ä½“ç°`],
+          ["å²—ä½ç¼ºå¤±é¡¹", Math.max(0, 100 - analysis.score), `${analysis.missing.length} é¡¹è¦æ±‚å°šæœªåœ¨ç®€å†ä¸­ä½“ç°`],
+          ["æˆæœè¡¨è¾¾", 60, "è¯·äººå·¥æ£€æŸ¥æ˜¯å¦åŒ…å«å¯éªŒè¯çš„åŠ¨ä½œä¸ç»“æœ"],
+          ["äº‹å®å®‰å…¨", 100, "è§„åˆ™åˆ†æä¸ä¼šå‘ç®€å†æ·»åŠ ä¸å­˜åœ¨çš„ä¿¡æ¯"],
+        ].map(([label, score, note]) => (
+          <div className="breakdown-card" key={String(label)}>
+            <div><strong>{label}</strong><span>{score}</span></div>
+            <i><b style={{ width: `${score}%` }} /></i>
+            <p>{note}</p>
+          </div>
+        ))}
+      </div>
+      <div className="evidence-grid">
+        <section className="evidence-card strength">
+          <div className="evidence-head">
+            <span>âœ“</span>
+            <div><h3>ç®€å†ä¼˜åŠ¿</h3><p>{analysis.matched.length} é¡¹è¦æ±‚å·²æœ‰æ–‡å­—è¯æ®</p></div>
+          </div>
+          {(analysis.matched.length ? analysis.matched : ["æš‚æ— æ˜ç¡®åŒ¹é…é¡¹"]).map((title) => (
+            <div className="evidence-row" key={title}>
+              <strong>{title}</strong><p>ç®€å†æ­£æ–‡ä¸­æ£€æµ‹åˆ°å¯¹åº”å…³é”®è¯</p><em>å·²åŒ¹é…</em>
+            </div>
+          ))}
+        </section>
+        <section className="evidence-card gap">
+          <div className="evidence-head">
+            <span>!</span>
+            <div><h3>æš‚æœªä½“ç°</h3><p>ä¸æ˜¯èƒ½åŠ›ç»“è®ºï¼Œåªä»£è¡¨ç®€å†æ— è¯æ®</p></div>
+          </div>
+          {(analysis.missing.length ? analysis.missing : ["æ— "]).map((title) => (
+            <div className="evidence-row" key={title}>
+              <strong>{title}</strong><p>JD ä¸­å‡ºç°ï¼Œä½†ç®€å†æ­£æ–‡æœªæ£€æµ‹åˆ°</p><em>å¾…ç¡®è®¤</em>
+            </div>
+          ))}
+        </section>
+      </div>
+      <div className="result-cta">
+        <div><strong>å·²ç”Ÿæˆ {suggestionCount} æ¡è§„åˆ™å»ºè®®</strong><span>ç¼ºå¤±æŠ€èƒ½ä¸ä¼šè‡ªåŠ¨å†™å…¥ç®€å†</span></div>
+        <button className="btn primary" onClick={goOptimize}>æŸ¥çœ‹ä¼˜åŒ–å¯¹æ¯” â†’</button>
+      </div>
+    </div>
+  );
+}
+
+function KeywordReport({ analysis }: { analysis: JDAnalysisResult }) {
+  return (
+    <div className="result-content keyword-content">
+      <section>
+        <h3>ç¡¬æ€§è¦æ±‚</h3>
+        <div className="keyword-cloud">
+          {(analysis.keywords.length ? analysis.keywords : ["æš‚æœªè¯†åˆ«åˆ°å¸¸è§æŠ€æœ¯å…³é”®è¯"]).map(
+            (keyword) => (
+              <span className={analysis.matched.includes(keyword) ? "matched" : ""} key={keyword}>
+                {analysis.matched.includes(keyword) ? "âœ“ " : ""}{keyword}
+              </span>
+            ),
+          )}
+        </div>
+      </section>
+      <section>
+        <h3>è½¯æ€§èƒ½åŠ›</h3>
+        <div className="keyword-cloud soft">
+          {["æ²Ÿé€šåä½œ", "å­¦ä¹ èƒ½åŠ›", "é—®é¢˜å®šä½", "éœ€æ±‚ç†è§£"].map((keyword) => (
+            <span key={keyword}>{keyword}</span>
+          ))}
+        </div>
+      </section>
+      <section className="invalid-copy">
+        <span>ä½ç­›é€‰ä»·å€¼æè¿°</span>
+        <p>â€œå…·å¤‡è‰¯å¥½çš„æ²Ÿé€šèƒ½åŠ›å’Œå­¦ä¹ èƒ½åŠ›â€å±äºé€šç”¨æè¿°ï¼Œéœ€è¦ç”¨ç»å†è¯æ®æ”¯æ’‘ã€‚</p>
+      </section>
+    </div>
+  );
+}
+
+function AdviceReport({
+  suggestions,
+  goOptimize,
+}: {
+  suggestions: Suggestion[];
+  goOptimize: () => void;
+}) {
+  return (
+    <div className="result-content">
+      <div className="advice-list">
+        {suggestions.map((suggestion, index) => (
+          <div className="advice-row" key={suggestion.id}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <div><strong>{suggestion.kind}</strong><p>{suggestion.module} Â· {suggestion.reason}</p></div>
+            <em>{suggestion.safe ? "å®‰å…¨å»ºè®®" : "éœ€è¦ç¡®è®¤"}</em>
+          </div>
+        ))}
+      </div>
+      <button className="btn primary wide" onClick={goOptimize}>é€æ¡æŸ¥çœ‹ä¿®æ”¹å‰å</button>
+    </div>
+  );
+}
+
+function InterviewReport({
+  questions,
+}: {
+  questions: [string, string, string][];
+}) {
+  return (
+    <div className="result-content interview-list">
+      {questions.map(([tag, question, source], index) => (
+        <article key={question}>
+          <span>{index + 1}</span>
+          <div><em>{tag}</em><h3>{question}</h3><p>{source}</p></div>
+          <button>å‡†å¤‡è¦ç‚¹ ï¼‹</button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function OptimizePage({
+  suggestions,
+  target,
+  selected,
+  setSelected,
+  updateSuggestion,
+  save,
+  back,
+}: {
+  suggestions: Suggestion[];
+  target: string;
+  selected: number;
+  setSelected: (id: number) => void;
+  updateSuggestion: (id: number, status: Suggestion["status"]) => void;
+  save: () => void;
+  back: () => void;
+}) {
+  const item = suggestions.find((suggestion) => suggestion.id === selected) ?? suggestions[0];
+  const accepted = suggestions.filter((suggestion) => suggestion.status === "accepted").length;
+  const decided = suggestions.filter((suggestion) => suggestion.status !== "pending").length;
+  return (
+    <div className="optimize-page">
+      <header className="optimize-topbar">
+        <div>
+          <button onClick={back}>â† è¿”å›åˆ†æ</button>
+          <div>
+            <p className="eyebrow">è§„åˆ™ä¼˜åŒ–å¯¹æ¯”</p>
+            <h1>{target} Â· JD å®šå‘ä¼˜åŒ–</h1>
+          </div>
+        </div>
+        <div className="decision-progress">
+          <span>{decided} / {suggestions.length} å·²å¤„ç†</span>
+          <i><b style={{ width: `${(decided / suggestions.length) * 100}%` }} /></i>
+        </div>
+        <button className="btn primary" onClick={save}>ä¿å­˜ä¸ºæ–°ç‰ˆæœ¬</button>
+      </header>
+
+      <div className="optimize-workspace">
+        <aside className="suggestion-list">
+          <div className="suggestion-list-head">
+            <div><strong>ä¿®æ”¹å»ºè®®</strong><span>{suggestions.length}</span></div>
+            <small>é€æ¡ç¡®è®¤åå†ä¿å­˜</small>
+          </div>
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              className={selected === suggestion.id ? "suggestion-nav active" : "suggestion-nav"}
+              onClick={() => setSelected(suggestion.id)}
+            >
+              <span className={`status-dot ${suggestion.status}`}>{suggestion.status === "accepted" ? "âœ“" : suggestion.status === "rejected" ? "Ã—" : index + 1}</span>
+              <div><strong>{suggestion.kind}</strong><small>{suggestion.module} Â· {suggestion.keyword}</small></div>
+              <em>{suggestion.safe ? "å®‰å…¨" : "éœ€è¡¥å……"}</em>
+            </button>
+          ))}
+          <div className="fact-guard">
+            <span>äº‹å®ä¿æŠ¤å·²å¼€å¯</span>
+            <p>æ–°å¢æ•°å­—ã€æŠ€èƒ½æˆ–æˆæœæ—¶ï¼Œå¿…é¡»å…ˆç”±ä½ è¡¥å……çœŸå®ä¿¡æ¯ã€‚</p>
+          </div>
+        </aside>
+
+        <section className="comparison-area">
+          <div className="comparison-heading">
+            <div>
+              <span className={item.safe ? "safe-badge" : "warning-badge"}>
+                {item.safe ? "âœ“ äº‹å®å®‰å…¨" : "! éœ€è¦çœŸå®ä¿¡æ¯"}
+              </span>
+              <h2>{item.kind}</h2>
+              <p>{item.reason}</p>
+            </div>
+            <span className="keyword-reference">å¯¹åº” JDï¼š{item.keyword}</span>
+          </div>
+
+          <div className="comparison-grid">
+            <article className="compare-card original">
+              <header><span>ä¿®æ”¹å‰</span><em>åŸå§‹ç®€å†</em></header>
+              <div className="compare-module-label">{item.module}</div>
+              <p>{item.original}</p>
+            </article>
+            <article className="compare-card optimized">
+              <header><span>ä¿®æ”¹å</span><em>è§„åˆ™å»ºè®®é¢„è§ˆ</em></header>
+              <div className="compare-module-label">{item.module}</div>
+              <p>{item.optimized}</p>
+              {!item.safe && (
+                <div className="unsafe-note">ã€ã€‘ä¸­çš„å†…å®¹å¿…é¡»ç”±ä½ å¡«å†™ï¼Œå½“å‰ç‰ˆæœ¬ä¸ä¼šå†™å…¥ç®€å†ã€‚</div>
+              )}
+            </article>
+          </div>
+
+          <div className="change-explanation">
+            <span>ä¿®æ”¹è¯´æ˜</span>
+            <p>{item.reason}</p>
+            <div>
+              <em>æœªä¿®æ”¹æ—¶é—´</em><em>æœªæ·»åŠ æŠ€èƒ½</em><em>æœªè™šæ„æˆæœ</em>
+            </div>
+          </div>
+
+          <div className="decision-actions">
+            <button
+              className={item.status === "rejected" ? "reject active" : "reject"}
+              onClick={() => updateSuggestion(item.id, "rejected")}
+            >
+              Ã— ä¿ç•™åŸæ–‡
+            </button>
+            <span>ä½ çš„é€‰æ‹©å¯ä»¥éšæ—¶æ›´æ”¹</span>
+            <button
+              className={item.status === "accepted" ? "accept active" : "accept"}
+              onClick={() => updateSuggestion(item.id, "accepted")}
+              disabled={!item.safe}
+            >
+              âœ“ {item.safe ? "æ¥å—ä¿®æ”¹" : "è¡¥å……åå¯æ¥å—"}
+            </button>
+          </div>
+        </section>
+
+        <aside className="optimization-summary">
+          <span className="panel-kicker">ç‰ˆæœ¬æ‘˜è¦</span>
+          <h3>å½“å‰å†³ç­–</h3>
+          <div className="decision-stat">
+            <div><strong>{accepted}</strong><span>å·²æ¥å—</span></div>
+            <div><strong>{suggestions.filter((s) => s.status === "rejected").length}</strong><span>å·²æ‹’ç»</span></div>
+          </div>
+          <div className="summary-divider" />
+          <h4>å°†äº§ç”Ÿçš„å˜åŒ–</h4>
+          <ul>
+            <li>ç›¸å…³ç»å†æ’åºæ›´æ¸…æ™°</li>
+            <li>Java / OOP å…³é”®è¯æ›´çªå‡º</li>
+            <li>åŸå§‹ç‰ˆæœ¬å®Œæ•´ä¿ç•™</li>
+          </ul>
+          <button className="btn dark wide" onClick={save}>å®Œæˆå¹¶ä¿å­˜ç‰ˆæœ¬</button>
+          <p>ä¿å­˜åå¯ç»§ç»­æ‰‹åŠ¨å¾®è°ƒ</p>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  hint,
+  rows = 4,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+  rows?: number;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toggleBold = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = value.slice(start, end);
+    const replacement = `**${selected}**`;
+    onChange(value.slice(0, start) + replacement + value.slice(end));
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      const selectionStart = start + 2;
+      textarea.setSelectionRange(
+        selectionStart,
+        selectionStart + selected.length,
+      );
+    });
+  };
+  return (
+    <label className="field">
+      <span className="field-heading">
+        <span>{label}</span>
+        <button
+          type="button"
+          className="format-bold-button"
+          onClick={(event) => {
+            event.preventDefault();
+            toggleBold();
+          }}
+          title="åŠ ç²—é€‰ä¸­çš„æ–‡å­—"
+          aria-label={`åŠ ç²—${label}ä¸­é€‰ä¸­çš„æ–‡å­—`}
+        >
+          B
+        </button>
+      </span>
+      <textarea
+        ref={textareaRef}
+        rows={rows}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+            event.preventDefault();
+            toggleBold();
+          }
+        }}
+      />
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+
+function SmartHint({ project = false }: { project?: boolean }) {
+  return (
+    <div className="smart-hint">
+      <span className="hint-icon">æç¤º</span>
+      <div>
+        <strong>{project ? "è¿™æ®µé¡¹ç›®ç»å†è¿˜å¯ä»¥æ›´å…·ä½“" : "å»ºè®®è¡¥å……å¯éªŒè¯çš„ä¿¡æ¯"}</strong>
+        <p>
+          {project
+            ? "ä½ è§£å†³äº†ä»€ä¹ˆå…·ä½“é—®é¢˜ï¼Ÿå“ªäº›éƒ¨åˆ†ç”±ä½ ç‹¬ç«‹å®Œæˆï¼Ÿ"
+            : "ä½¿ç”¨äº†ä»€ä¹ˆå·¥å…·ï¼Ÿæ•°æ®è§„æ¨¡å¤šå¤§ï¼Ÿæœ€ç»ˆäº§ç”Ÿäº†ä»€ä¹ˆç»“æœï¼Ÿ"}
+        </p>
+      </div>
+      <button>æŸ¥çœ‹å†™æ³•</button>
+    </div>
+  );
+}
+
+function TruthNotice() {
+  return (
+    <div className="truth-notice">
+      <span>ç›¾</span>
+      <p><strong>çœŸå®ä¿¡æ¯ä¿æŠ¤</strong>å†™ä½œæç¤ºåªåŸºäºä½ å·²å¡«å†™çš„å†…å®¹ï¼Œä¸ä¼šæ·»åŠ ä¸å­˜åœ¨çš„ç»å†ã€æŠ€èƒ½æˆ–æ•°æ®ã€‚</p>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header><h2>{title}</h2><button onClick={onClose}>Ã—</button></header>
+        {children}
+      </section>
+    </div>
+  );
+}
