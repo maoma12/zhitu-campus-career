@@ -31,6 +31,7 @@ type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
 type ResumeDensity = "normal" | "compact" | "ultra";
 type ResumeFontSize = 6 | 7 | 8 | 9 | 10 | 12;
+type ResumeHeadingFontSize = 8 | 9 | 10.5 | 12;
 type StandardModuleKey =
   | "basic"
   | "experience"
@@ -94,6 +95,7 @@ type Resume = {
   name: string;
   target: string;
   fontSize: ResumeFontSize;
+  headingFontSize: ResumeHeadingFontSize;
   updated: string;
   completion: number;
   version: number;
@@ -205,6 +207,7 @@ const seedResume: Resume = {
   name: "Java 后端开发校招简历",
   target: "Java 后端开发实习生",
   fontSize: 9,
+  headingFontSize: 10.5,
   updated: "刚刚",
   completion: 88,
   version: 3,
@@ -267,6 +270,7 @@ const blankResume: Resume = {
   name: "我的第一份简历",
   target: "",
   fontSize: 9,
+  headingFontSize: 10.5,
   updated: "刚刚",
   completion: 10,
   version: 1,
@@ -559,6 +563,14 @@ function normalizeResumeFontSize(value: unknown): ResumeFontSize {
     : 9;
 }
 
+function normalizeResumeHeadingFontSize(
+  value: unknown,
+): ResumeHeadingFontSize {
+  return value === 8 || value === 9 || value === 10.5 || value === 12
+    ? value
+    : 10.5;
+}
+
 function normalizeModuleList(
   value: unknown,
   fallback: ModuleKey[],
@@ -683,6 +695,9 @@ function normalizeResume(value: unknown): Resume {
     name: safeString(safeValue.name, blankResume.name),
     target: safeString(safeValue.target),
     fontSize: normalizeResumeFontSize(safeValue.fontSize),
+    headingFontSize: normalizeResumeHeadingFontSize(
+      safeValue.headingFontSize,
+    ),
     updated: safeString(safeValue.updated, "刚刚"),
     completion: Math.max(
       0,
@@ -3665,6 +3680,26 @@ function Editor({
               ))}
             </select>
           </label>
+          <label className="font-size-control">
+            <span>标题字号</span>
+            <select
+              aria-label="简历模块标题字号"
+              value={resume.headingFontSize}
+              onChange={(event) =>
+                updateCurrent({
+                  headingFontSize: Number(
+                    event.target.value,
+                  ) as ResumeHeadingFontSize,
+                })
+              }
+            >
+              {[8, 9, 10.5, 12].map((size) => (
+                <option key={size} value={size}>
+                  {size}pt
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="template-switch">
             <span>模板</span>
             <button
@@ -4393,6 +4428,7 @@ function ResumePreview({
         {
           "--resume-pages": pageCount,
           "--resume-body-font-size": `${resume.fontSize}pt`,
+          "--resume-heading-font-size": `${resume.headingFontSize}pt`,
         } as React.CSSProperties
       }
     >

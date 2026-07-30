@@ -2066,6 +2066,7 @@ select:focus-visible {
   --a4-page-height: 862.714px;
   --resume-pages: 1;
   --resume-body-font-size: 9pt;
+  --resume-heading-font-size: 10.5pt;
   position: relative;
   width: min(100%, 610px);
   min-height: calc(var(--a4-page-height) * var(--resume-pages));
@@ -2231,7 +2232,7 @@ select:focus-visible {
   margin: 0 0 7px;
   border-bottom: 1px solid #1e2722;
   padding-bottom: 4px;
-  font-size: var(--resume-body-font-size);
+  font-size: var(--resume-heading-font-size);
   font-weight: 800;
   letter-spacing: 0.04em;
   break-after: avoid-page;
