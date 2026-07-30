@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Blob URLs are the exact JPEG pages embedded in the exported PDF. */
+
 import {
   ChangeEvent,
   RefObject,
@@ -1017,6 +1019,13 @@ type VisualPdfPage = {
   jpeg: Uint8Array;
   width: number;
   height: number;
+  sha256: string;
+};
+
+type SharedPreviewRender = {
+  canvases: HTMLCanvasElement[];
+  pages: VisualPdfPage[];
+  urls: string[];
 };
 
 function buildVisualPdf(pages: VisualPdfPage[]) {
@@ -2797,10 +2806,19 @@ function Editor({
   const [fitsOnePage, setFitsOnePage] = useState(true);
   const [density, setDensity] = useState<ResumeDensity>("normal");
   const [pageCount, setPageCount] = useState(1);
+  const [layoutRevision, setLayoutRevision] = useState(0);
+  const [previewPageUrls, setPreviewPageUrls] = useState<string[]>([]);
+  const [previewPageHashes, setPreviewPageHashes] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [addModuleOpen, setAddModuleOpen] = useState(false);
   const [newModuleName, setNewModuleName] = useState("");
   const paperRef = useRef<HTMLElement>(null);
+  const sharedPreviewRef = useRef<{
+    revision: number;
+    render: SharedPreviewRender;
+  } | null>(null);
+  const previewPageUrlsRef = useRef<string[]>([]);
+  const previewGenerationRef = useRef(0);
   const paginationCycleRef = useRef({
     input: "",
     exhausted: false,
@@ -2947,6 +2965,7 @@ function Editor({
           paper.style.setProperty("--resume-pages", String(pages));
           setPageCount((current) => (current === pages ? current : pages));
           setFitsOnePage(pages === 1);
+          setLayoutRevision((current) => current + 1);
         });
       }
     });
@@ -2963,6 +2982,8 @@ function Editor({
   const safeFilename =
     resume.name.replace(/[<>:"/\\|?*]/g, "-").trim() || "我的简历";
 
+  // Retained as a compatibility fallback while the shared raster renderer is active.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const renderResumeCanvas = async () => {
     const canvas = document.createElement("canvas");
     canvas.width = 1240;
@@ -3445,6 +3466,76 @@ function Editor({
     });
   };
 
+  const createSharedPreviewRender = async (): Promise<SharedPreviewRender> => {
+    const canvases = await renderPreviewPageCanvases();
+    const encoded = await Promise.all(
+      canvases.map(
+        (canvas) =>
+          new Promise<{ blob: Blob; page: VisualPdfPage }>((resolve, reject) => {
+          canvas.toBlob(
+            async (blob) => {
+              if (!blob) {
+                reject(new Error("JPEG encoding failed"));
+                return;
+              }
+              const buffer = await blob.arrayBuffer();
+              const digest = await crypto.subtle.digest("SHA-256", buffer);
+              resolve({
+                blob,
+                page: {
+                  jpeg: new Uint8Array(buffer),
+                  width: canvas.width,
+                  height: canvas.height,
+                  sha256: Array.from(new Uint8Array(digest), (byte) =>
+                    byte.toString(16).padStart(2, "0"),
+                  ).join(""),
+                },
+              });
+              },
+              "image/jpeg",
+              0.97,
+            );
+          }),
+      ),
+    );
+    return {
+      canvases,
+      pages: encoded.map(({ page }) => page),
+      urls: encoded.map(({ blob }) => URL.createObjectURL(blob)),
+    };
+  };
+
+  const commitSharedPreviewRender = (
+    revision: number,
+    generation: number,
+    render: SharedPreviewRender,
+  ) => {
+    if (generation !== previewGenerationRef.current) {
+      render.urls.forEach((url) => URL.revokeObjectURL(url));
+      return false;
+    }
+    previewPageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewPageUrlsRef.current = render.urls;
+    sharedPreviewRef.current = { revision, render };
+    setPreviewPageUrls(render.urls);
+    setPreviewPageHashes(render.pages.map(({ sha256 }) => sha256));
+    return true;
+  };
+
+  const refreshSharedPreview = async (revision: number) => {
+    const generation = previewGenerationRef.current + 1;
+    previewGenerationRef.current = generation;
+    const render = await createSharedPreviewRender();
+    commitSharedPreviewRender(revision, generation, render);
+    return render;
+  };
+
+  const ensureSharedPreview = async () => {
+    const current = sharedPreviewRef.current;
+    if (current?.revision === layoutRevision) return current.render;
+    return refreshSharedPreview(layoutRevision);
+  };
+
   const downloadBlob = (blob: Blob, filename: string) => {
     const downloadUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -3460,29 +3551,7 @@ function Editor({
     setExportOpen(false);
     notify("正在生成与预览一致的高清 PDF…");
     try {
-      const canvases = await renderPreviewPageCanvases();
-      const pages = await Promise.all(
-        canvases.map(
-          (canvas) =>
-            new Promise<VisualPdfPage>((resolve, reject) => {
-              canvas.toBlob(
-                async (blob) => {
-                  if (!blob) {
-                    reject(new Error("JPEG encoding failed"));
-                    return;
-                  }
-                  resolve({
-                    jpeg: new Uint8Array(await blob.arrayBuffer()),
-                    width: canvas.width,
-                    height: canvas.height,
-                  });
-                },
-                "image/jpeg",
-                0.97,
-              );
-            }),
-        ),
-      );
+      const { pages } = await ensureSharedPreview();
       downloadBlob(
         new Blob([buildVisualPdf(pages)], { type: "application/pdf" }),
         `${safeFilename}-A4.pdf`,
@@ -3498,7 +3567,26 @@ function Editor({
     setExportOpen(false);
     notify("正在生成 A4 PNG…");
     try {
-      const canvas = await renderResumeCanvas();
+      const { canvases } = await ensureSharedPreview();
+      const canvas =
+        canvases.length === 1
+          ? canvases[0]
+          : (() => {
+              const combined = document.createElement("canvas");
+              combined.width = canvases[0].width;
+              combined.height = canvases.reduce(
+                (height, page) => height + page.height,
+                0,
+              );
+              const context = combined.getContext("2d");
+              if (!context) throw new Error("Canvas is unavailable");
+              let y = 0;
+              canvases.forEach((page) => {
+                context.drawImage(page, 0, y);
+                y += page.height;
+              });
+              return combined;
+            })();
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (value) =>
@@ -3512,6 +3600,28 @@ function Editor({
       notify("PNG 生成失败，请重试");
     }
   };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshSharedPreview(layoutRevision).catch((error) => {
+        console.error("Shared preview render failed", error);
+      });
+    }, 80);
+    return () => window.clearTimeout(timer);
+    // The layout revision is the explicit signal that pagination and density
+    // measurements have settled; render helpers intentionally stay outside
+    // the dependency list to avoid regenerating on unrelated editor renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutRevision]);
+
+  useEffect(
+    () => () => {
+      previewGenerationRef.current += 1;
+      previewPageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      previewPageUrlsRef.current = [];
+    },
+    [],
+  );
 
   return (
     <div className="editor-page">
@@ -3790,13 +3900,33 @@ function Editor({
             </div>
           </div>
           <div className="paper-stage">
-            <ResumePreview
-              resume={resume}
-              template={template}
-              paperRef={paperRef}
-              density={density}
-              pageCount={pageCount}
-            />
+            <div className="resume-render-source" aria-hidden="true">
+              <ResumePreview
+                resume={resume}
+                template={template}
+                paperRef={paperRef}
+                density={density}
+                pageCount={pageCount}
+              />
+            </div>
+            {previewPageUrls.length ? (
+              <div className="shared-preview-pages">
+                {previewPageUrls.map((url, index) => (
+                  <img
+                    alt={`简历预览第 ${index + 1} 页`}
+                    className="shared-preview-page"
+                    data-page-sha256={previewPageHashes[index]}
+                    draggable={false}
+                    key={url}
+                    src={url}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="shared-preview-loading" aria-live="polite">
+                正在同步 A4 预览…
+              </div>
+            )}
             <div className="paper-status">
               <span>共 {pageCount} 页</span>
               <span>
@@ -3942,7 +4072,6 @@ function ModuleForm({
                     <span className="avatar-thumb">
                       {resume.basic.avatar ? (
                         // 用户头像是本地 data URL，不能交给 Next Image 优化器。
-                        // eslint-disable-next-line @next/next/no-img-element
                         <img src={resume.basic.avatar} alt="" />
                     ) : (
                       resume.basic.name?.slice(0, 1) || "你"
@@ -4288,7 +4417,6 @@ function ResumePreview({
         <div className="paper-avatar">
           {resume.basic.avatar ? (
             // 用户头像是本地 data URL，不能交给 Next Image 优化器。
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={resume.basic.avatar} alt={`${resume.basic.name || "用户"}的头像`} />
           ) : (
             resume.basic.name?.slice(0, 1) || "你"
