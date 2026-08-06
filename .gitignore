@@ -39,6 +39,9 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 /dist/
+/cloudbase-dist/
+/.npm-cache/
+/.cloudbase-server.*.log
 /.wrangler/
 /outputs/
 /output/

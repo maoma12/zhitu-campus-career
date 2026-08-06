@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "build:cloudbase": "npm run build && node scripts/build-cloudbase.mjs",
     "start": "vinext start",
     "test": "npm run lint && npm run build",
     "lint": "eslint app db worker drizzle.config.ts next.config.ts vite.config.ts eslint.config.mjs",
