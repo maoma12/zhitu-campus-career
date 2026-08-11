@@ -10,6 +10,7 @@ export type ParsedResumeText = {
   education: string;
   experience: string;
   project: string;
+  campus: string;
   skills: string;
   certificate: string;
   evaluation: string;
@@ -33,6 +34,50 @@ type PdfModule = {
     }>;
   };
 };
+
+export function splitResumeEntries(text: string) {
+  return text
+    .trim()
+    .split(/\n\s*\n+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+export function normalizeOcrText(text: string) {
+  return normalizeText(text)
+    .replace(/([\u3400-\u9fff])[\t ]+(?=[\u3400-\u9fff])/g, "$1")
+    .replace(/[\t ]+([，。；：、！？）】》])/g, "$1")
+    .replace(/([（【《])[\t ]+/g, "$1");
+}
+
+export function joinPdfRowItems(items: PdfTextItem[]) {
+  let previousEnd: number | null = null;
+  return [...items]
+    .sort(
+      (a, b) =>
+        (a.transform?.[4] ?? 0) - (b.transform?.[4] ?? 0),
+    )
+    .reduce((result, item) => {
+      const text = item.str ?? "";
+      const x = item.transform?.[4] ?? 0;
+      const fontSize = Math.max(
+        Math.abs(item.transform?.[0] ?? 0),
+        Math.abs(item.transform?.[3] ?? 0),
+        1,
+      );
+      const visualGap = previousEnd === null ? 0 : x - previousEnd;
+      const separator =
+        result &&
+        !/\s$/.test(result) &&
+        !/^\s/.test(text) &&
+        visualGap > fontSize * 0.35
+          ? " "
+          : "";
+      previousEnd = x + (item.width ?? 0);
+      return `${result}${separator}${text}`;
+    }, "")
+    .trim();
+}
 
 type TesseractGlobal = {
   createWorker(
@@ -91,14 +136,7 @@ async function readPdf(file: File) {
         rows
           .sort((a, b) => b.y - a.y)
           .map((row) =>
-            row.items
-              .sort(
-                (a, b) =>
-                  (a.transform?.[4] ?? 0) - (b.transform?.[4] ?? 0),
-              )
-              .map((item) => item.str?.trim() ?? "")
-              .filter(Boolean)
-              .join(" "),
+            joinPdfRowItems(row.items),
           )
           .join("\n"),
       );
@@ -193,14 +231,14 @@ async function readImage(file: File, onProgress?: (value: number) => void) {
   const worker = await window.Tesseract.createWorker(["chi_sim", "eng"], 1, {
     workerPath: "/vendor/tesseract/worker.min.js",
     corePath: "/vendor/tesseract/tesseract-core-simd-lstm.wasm.js",
-    langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/chi_sim/4.0.0_best_int",
+    langPath: "/vendor/tesseract/lang",
     logger: (message: { progress?: number }) => {
       if (typeof message.progress === "number") onProgress?.(message.progress);
     },
   });
   try {
     const result = await worker.recognize(file);
-    return normalizeText(result.data.text);
+    return normalizeOcrText(result.data.text);
   } finally {
     await worker.terminate();
   }
@@ -234,13 +272,16 @@ export function parseResumeText(rawText: string): ParsedResumeText {
   const text = normalizeText(rawText);
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
   const headings = [
-    "个人简介", "教育经历", "教育背景", "实习经历", "工作经历", "项目经历",
+    "个人简介", "教育经历", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历",
     "技能特长", "专业技能", "证书荣誉", "荣誉奖项", "自我评价", "作品链接",
   ];
   const email = text.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/)?.[0] ?? "";
   const phone =
+    text.match(/TEST[- ]?\d{3}[- ]?\d{4}/i)?.[0] ??
     text.match(/(?<!\d)(?:\+?86[- ]?)?1[3-9]\d(?:[- ]?\d){8}(?!\d)/)?.[0] ?? "";
   const name =
+    lines.find((line) => /^姓名[:：]/.test(line))
+      ?.replace(/^姓名[:：]\s*/, "") ??
     lines.find(
       (line) =>
         line.length >= 2 &&
@@ -255,11 +296,15 @@ export function parseResumeText(rawText: string): ParsedResumeText {
     name,
     email,
     phone,
-    city: lines.find((line) => /(?:北京|上海|深圳|广州|杭州|成都|武汉|南京|西安|苏州)/.test(line))?.match(/北京|上海|深圳|广州|杭州|成都|武汉|南京|西安|苏州/)?.[0] ?? "",
+    city:
+      lines.find((line) => /^(?:所在地|城市)[:：]/.test(line))
+        ?.replace(/^(?:所在地|城市)[:：]\s*/, "") ??
+      lines.find((line) => /(?:北京|上海|深圳|广州|杭州|成都|武汉|南京|西安|苏州)/.test(line))?.match(/北京|上海|深圳|广州|杭州|成都|武汉|南京|西安|苏州/)?.[0] ?? "",
     summary: section(text, ["个人简介", "个人总结"], allFollowing),
     education: section(text, ["教育经历", "教育背景"], allFollowing),
     experience: section(text, ["实习经历", "工作经历"], allFollowing),
     project: section(text, ["项目经历"], allFollowing),
+    campus: section(text, ["校园经历"], allFollowing),
     skills: section(text, ["技能特长", "专业技能", "技能"], allFollowing),
     certificate: section(text, ["证书荣誉", "荣誉奖项", "证书"], allFollowing),
     evaluation: section(text, ["自我评价"], allFollowing),
@@ -271,6 +316,7 @@ export async function extractResumeText(
   file: File,
   onProgress?: (value: number) => void,
 ) {
+  validateImportFile(file);
   const lower = file.name.toLowerCase();
   if (file.type === "application/pdf" || lower.endsWith(".pdf")) return readPdf(file);
   if (
@@ -283,4 +329,19 @@ export async function extractResumeText(
   if (file.type.startsWith("image/")) return readImage(file, onProgress);
   if (lower.endsWith(".txt")) return normalizeText(await file.text());
   throw new Error("目前支持 PDF、DOCX、TXT、JPG 和 PNG");
+}
+
+export function validateImportFile(
+  file: Pick<File, "name" | "type" | "size">,
+) {
+  const lower = file.name.toLowerCase();
+  const isImage = file.type.startsWith("image/") || /\.(?:png|jpe?g)$/.test(lower);
+  const limit = isImage ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
+  if (file.size > limit) {
+    throw new Error(
+      isImage
+        ? "图片不能超过 10 MB，请先压缩后再导入"
+        : "文件不能超过 20 MB，请拆分或压缩后再导入",
+    );
+  }
 }

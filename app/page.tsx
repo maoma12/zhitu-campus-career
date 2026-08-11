@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   AuthSession,
+  SESSION_STORAGE_KEY,
   cloudConfigured,
   consumeAuthRedirect,
   getSession,
@@ -25,12 +26,33 @@ import {
   extractResumeText,
   parseResumeText,
   ParsedResumeText,
+  splitResumeEntries,
 } from "./lib/resume-import";
+import {
+  ANONYMOUS_WORKSPACE_KEY,
+  IdentityEpoch,
+  LEGACY_SHARED_WORKSPACE_KEYS,
+  accountWorkspaceKey,
+  advanceIdentityEpoch,
+  isCurrentIdentity,
+  removeCurrentResumeSnapshot,
+  resolveAuthenticatedWorkspace,
+} from "./lib/workspace-security";
+import {
+  analyzeKeywordCoverage,
+  KeywordCoverageResult,
+} from "./lib/jd-analysis";
+import {
+  decideSmartLayout,
+  effectiveResumeDensity,
+  normalizeResumeFontSize,
+  RESUME_FONT_SIZE_OPTIONS,
+  ResumeDensity,
+  ResumeFontSize,
+} from "./lib/resume-layout";
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
-type ResumeDensity = "normal" | "compact" | "ultra";
-type ResumeFontSize = 6 | 7 | 8 | 9 | 10 | 12;
 type ResumeHeadingFontSize = 8 | 9 | 10.5 | 12;
 type StandardModuleKey =
   | "basic"
@@ -152,11 +174,7 @@ type Suggestion = {
   targetId?: string;
 };
 
-type JDAnalysisResult = {
-  score: number;
-  keywords: string[];
-  matched: string[];
-  missing: string[];
+type JDAnalysisResult = KeywordCoverageResult & {
   questions: [string, string, string][];
 };
 
@@ -387,20 +405,57 @@ const jdKeywordRules = [
 ];
 
 function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
-  const jdLower = jd.toLowerCase();
-  const resumeText = JSON.stringify(resume).toLowerCase();
+  const sections = [
+    {
+      label: "实习经历",
+      level: "experience" as const,
+      text: resume.experiences
+        .map((item) => `${item.company} ${item.role} ${item.description}`)
+        .join("\n"),
+    },
+    {
+      label: "项目经历",
+      level: "experience" as const,
+      text: resume.projects
+        .map((item) => `${item.name} ${item.role} ${item.stack} ${item.description}`)
+        .join("\n"),
+    },
+    {
+      label: "教育经历",
+      level: "experience" as const,
+      text: resume.educations
+        .map((item) => `${item.school} ${item.major} ${item.degree} ${item.detail}`)
+        .join("\n"),
+    },
+    {
+      label: "校园经历",
+      level: "experience" as const,
+      text: resume.campusExperiences
+        .map((item) => `${item.department} ${item.description}`)
+        .join("\n"),
+    },
+    {
+      label: "技能特长",
+      level: "listed" as const,
+      text: resume.skills,
+    },
+    {
+      label: "个人简介/求职目标",
+      level: "listed" as const,
+      text: `${resume.target} ${resume.basic.target} ${resume.basic.summary}`,
+    },
+    {
+      label: "证书与其他陈述",
+      level: "listed" as const,
+      text: `${resume.certificate} ${resume.evaluation} ${resume.portfolio}`,
+    },
+  ];
+  const coverage = analyzeKeywordCoverage(jd, jdKeywordRules, sections);
   const selected = jdKeywordRules.filter((rule) =>
-    rule.aliases.some((alias) => jdLower.includes(alias.toLowerCase())),
+    coverage.keywords.includes(rule.label),
   );
-  const matchedRules = selected.filter((rule) =>
-    rule.aliases.some((alias) => resumeText.includes(alias.toLowerCase())),
-  );
-  const missingRules = selected.filter((rule) => !matchedRules.includes(rule));
-  const score = selected.length
-    ? Math.round((matchedRules.length / selected.length) * 100)
-    : 0;
   const questions: [string, string, string][] = selected.slice(0, 7).map((rule) => [
-    missingRules.includes(rule) ? "待补充能力" : "岗位重点",
+    coverage.missing.includes(rule.label) ? "待补充能力" : "岗位重点",
     rule.question,
     `来源：JD 关键词「${rule.label}」`,
   ]);
@@ -411,10 +466,7 @@ function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
     );
   }
   return {
-    score,
-    keywords: selected.map((rule) => rule.label),
-    matched: matchedRules.map((rule) => rule.label),
-    missing: missingRules.map((rule) => rule.label),
+    ...coverage,
     questions: questions.slice(0, 8),
   };
 }
@@ -540,6 +592,25 @@ function cloneResume(resume: Resume): Resume {
   return JSON.parse(JSON.stringify(resume)) as Resume;
 }
 
+function createCleanWorkspace(): StoredWorkspace {
+  return {
+    resumes: [cloneResume(blankResume)],
+    currentId: blankResume.id,
+    template: "classic",
+    histories: {},
+  };
+}
+
+function readLocalWorkspace(key: string): unknown | null {
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -550,17 +621,6 @@ function safeString(value: unknown, fallback = "") {
 
 function safeNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function normalizeResumeFontSize(value: unknown): ResumeFontSize {
-  return value === 6 ||
-    value === 7 ||
-    value === 8 ||
-    value === 9 ||
-    value === 10 ||
-    value === 12
-    ? value
-    : 9;
 }
 
 function normalizeResumeHeadingFontSize(
@@ -1369,14 +1429,18 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [localPreviewMode, setLocalPreviewMode] = useState(false);
+  const [persistence, setPersistence] = useState<{
+    identity: IdentityEpoch;
+    cloudSaveAllowed: boolean;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const identityRef = useRef<IdentityEpoch>({ generation: 0, userId: null });
+  const jdAnalysisTimerRef = useRef<number | null>(null);
 
   const current =
     resumes.find((resume) => resume.id === currentId) ?? resumes[0];
 
-  useEffect(() => {
-    let cancelled = false;
-    const applyWorkspace = (parsed: unknown) => {
+  const applyWorkspace = (parsed: unknown) => {
       if (!isRecord(parsed)) return;
       const normalizedResumes = Array.isArray(parsed.resumes)
         ? parsed.resumes.map(normalizeResume)
@@ -1417,41 +1481,114 @@ export default function Home() {
         );
         setHistories(migrated);
       }
-    };
+  };
+
+  const resetSensitiveState = () => {
+    const clean = createCleanWorkspace();
+    setView("dashboard");
+    setResumes(clean.resumes);
+    setCurrentId(clean.currentId);
+    setActiveModule("basic");
+    setTemplate(clean.template);
+    setSaveStatus("尚未保存");
+    setToast("");
+    setShowNew(false);
+    setNewName("我的校招简历");
+    setShowVersion(false);
+    setShowHistory(false);
+    setVersionName("");
+    setHistories(clean.histories);
+    setShowImport(false);
+    setParsedImport(null);
+    setImportFileName("");
+    setImportStatus("");
+    setImportProgress(0);
+    setJdText("");
+    setAnalysisReady(false);
+    setAnalyzing(false);
+    setAnalysisTab("match");
+    setJdAnalysis(null);
+    setSuggestions([]);
+    setSelectedSuggestion(1);
+    if (jdAnalysisTimerRef.current !== null) {
+      window.clearTimeout(jdAnalysisTimerRef.current);
+      jdAnalysisTimerRef.current = null;
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadController = new AbortController();
     const initialize = async () => {
+      resetSensitiveState();
+      setPersistence(null);
       try {
         const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
           window.location.hostname,
         );
         if (localPreview) {
+          const identity = advanceIdentityEpoch(identityRef.current, null);
+          identityRef.current = identity;
           setLocalPreviewMode(true);
-          const local =
-            localStorage.getItem("zhitu-workspace-v1") ??
-            localStorage.getItem("campus-career-prototype");
-          if (local) applyWorkspace(JSON.parse(local));
+          const anonymous = readLocalWorkspace(ANONYMOUS_WORKSPACE_KEY);
+          const legacy = LEGACY_SHARED_WORKSPACE_KEYS
+            .map(readLocalWorkspace)
+            .find((workspace) => workspace !== null);
+          if (anonymous ?? legacy) applyWorkspace(anonymous ?? legacy);
+          setPersistence({ identity, cloudSaveAllowed: false });
           return;
         }
         const redirected = await consumeAuthRedirect();
         const activeSession = redirected ?? (await getSession());
         if (cancelled) return;
+        const identity = advanceIdentityEpoch(
+          identityRef.current,
+          activeSession?.user.id ?? null,
+        );
+        identityRef.current = identity;
         setSession(activeSession);
 
         if (activeSession) {
-          const cloud = await loadWorkspace<StoredWorkspace>(activeSession);
-          if (cancelled) return;
-          if (cloud) {
-            applyWorkspace(cloud);
-          } else {
-            const local =
-              localStorage.getItem("zhitu-workspace-v1") ??
-              localStorage.getItem("campus-career-prototype");
-            if (local) applyWorkspace(JSON.parse(local));
+          let cloudResult;
+          try {
+            cloudResult = await loadWorkspace<StoredWorkspace>(
+              activeSession,
+              loadController.signal,
+            );
+          } catch (error) {
+            if (loadController.signal.aborted) return;
+            cloudResult = { status: "unavailable" } as const;
+            setAuthMessage(
+              error instanceof Error
+                ? `云端读取失败：${error.message}。已暂停云端自动保存。`
+                : "云端读取失败，已暂停云端自动保存。",
+            );
           }
+          if (
+            cancelled ||
+            !isCurrentIdentity(identity, identityRef.current)
+          ) return;
+          const accountCache = readLocalWorkspace(
+            accountWorkspaceKey(activeSession.user.id),
+          ) as StoredWorkspace | null;
+          const resolved = resolveAuthenticatedWorkspace(
+            cloudResult,
+            accountCache,
+            createCleanWorkspace,
+          );
+          applyWorkspace(resolved.workspace);
+          setPersistence({
+            identity,
+            cloudSaveAllowed: resolved.cloudSaveAllowed,
+          });
         } else if (!cloudConfigured) {
-          const local =
-            localStorage.getItem("zhitu-workspace-v1") ??
-            localStorage.getItem("campus-career-prototype");
-          if (local) applyWorkspace(JSON.parse(local));
+          const anonymous = readLocalWorkspace(ANONYMOUS_WORKSPACE_KEY);
+          const legacy = LEGACY_SHARED_WORKSPACE_KEYS
+            .map(readLocalWorkspace)
+            .find((workspace) => workspace !== null);
+          if (anonymous ?? legacy) applyWorkspace(anonymous ?? legacy);
+          setPersistence({ identity, cloudSaveAllowed: false });
         }
       } catch (error) {
         setAuthMessage(error instanceof Error ? error.message : "登录状态读取失败");
@@ -1462,32 +1599,109 @@ export default function Home() {
     void initialize();
     return () => {
       cancelled = true;
+      loadController.abort();
     };
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !persistence) return;
+    const expectedIdentity = persistence.identity;
+    const saveController = new AbortController();
     const timer = window.setTimeout(() => {
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
       const workspace: StoredWorkspace = {
         resumes,
         currentId,
         template,
         histories,
       };
-      localStorage.setItem(
-        "zhitu-workspace-v1",
-        JSON.stringify(workspace),
-      );
       if (session) {
-        void saveWorkspace(session, workspace)
-          .then(() => setSaveStatus(`云端已保存 ${storageTime()}`))
-          .catch(() => setSaveStatus("云端保存失败，已保存在本机"));
+        if (expectedIdentity.userId !== session.user.id) return;
+        localStorage.setItem(
+          accountWorkspaceKey(session.user.id),
+          JSON.stringify(workspace),
+        );
+        if (!persistence.cloudSaveAllowed) {
+          setSaveStatus("仅保存在本账号设备缓存，云端自动保存已暂停");
+          return;
+        }
+        void saveWorkspace(session, workspace, saveController.signal)
+          .then(() => {
+            if (isCurrentIdentity(expectedIdentity, identityRef.current)) {
+              setSaveStatus(`云端已保存 ${storageTime()}`);
+            }
+          })
+          .catch((error) => {
+            if (
+              error instanceof DOMException &&
+              error.name === "AbortError"
+            ) return;
+            if (isCurrentIdentity(expectedIdentity, identityRef.current)) {
+              setSaveStatus("云端保存失败，已保存在本账号设备缓存");
+            }
+          });
       } else {
+        if (expectedIdentity.userId !== null) return;
+        localStorage.setItem(
+          ANONYMOUS_WORKSPACE_KEY,
+          JSON.stringify(workspace),
+        );
         setSaveStatus(`本机已保存 ${storageTime()}`);
       }
     }, 550);
-    return () => window.clearTimeout(timer);
-  }, [resumes, currentId, template, histories, ready, session]);
+    return () => {
+      window.clearTimeout(timer);
+      saveController.abort();
+    };
+  }, [resumes, currentId, template, histories, ready, session, persistence]);
+
+  useEffect(() => {
+    if (!session) return;
+    const expectedIdentity = identityRef.current;
+    let cancelled = false;
+
+    const invalidateSession = () => {
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
+      identityRef.current = advanceIdentityEpoch(identityRef.current, null);
+      setPersistence(null);
+      setSession(null);
+      resetSensitiveState();
+      setAuthMessage("登录状态已失效，请重新登录");
+      setReady(true);
+    };
+
+    const refreshOrInvalidate = async () => {
+      const refreshed = await getSession();
+      if (
+        cancelled ||
+        !isCurrentIdentity(expectedIdentity, identityRef.current)
+      ) return;
+      if (!refreshed || refreshed.user.id !== expectedIdentity.userId) {
+        invalidateSession();
+        return;
+      }
+      setSession(refreshed);
+    };
+
+    const refreshDelay = Math.max(
+      0,
+      session.expiresAt * 1000 - Date.now() - 60_000,
+    );
+    const refreshTimer = window.setTimeout(() => {
+      void refreshOrInvalidate();
+    }, refreshDelay);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === SESSION_STORAGE_KEY) void refreshOrInvalidate();
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(refreshTimer);
+      window.removeEventListener("storage", handleStorage);
+    };
+    // resetSensitiveState intentionally invalidates every sensitive UI state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.expiresAt, session?.user.id]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1695,6 +1909,7 @@ export default function Home() {
   };
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const expectedIdentity = identityRef.current;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -1705,14 +1920,17 @@ export default function Home() {
     setShowImport(true);
     try {
       const text = await extractResumeText(file, (value) => {
+        if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
         setImportProgress(Math.round(value * 100));
         setImportStatus(`正在本地识别图片文字… ${Math.round(value * 100)}%`);
       });
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
       if (!text.trim()) throw new Error("文件中未提取到可用文字");
       const parsed = parseResumeText(text);
       setParsedImport(parsed);
       setImportStatus("解析完成，请导入后逐项校对");
     } catch (error) {
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
       setImportStatus(
         error instanceof Error ? error.message : "文件解析失败，请换一种格式重试",
       );
@@ -1735,33 +1953,58 @@ export default function Home() {
         summary: parsedImport.summary,
       },
       experiences: parsedImport.experience
-        ? [{
-            id: `experience-${Date.now()}`,
-            company: parsedImport.experience.split("\n")[0] ?? "",
-            role: "",
-            period: "",
-            description: parsedImport.experience,
-          }]
+        ? splitResumeEntries(parsedImport.experience).map((entry, index) => {
+            const [heading = "", ...descriptionLines] = entry.split("\n");
+            const [company = "", role = "", period = ""] = heading.split("｜");
+            return {
+              id: `experience-${Date.now()}-${index}`,
+              company,
+              role,
+              period,
+              description: descriptionLines.join("\n"),
+            };
+          })
         : [],
       educations: parsedImport.education
-        ? [{
-            id: `education-${Date.now()}`,
-            school: parsedImport.education.split("\n")[0] ?? "",
-            major: "",
-            degree: "",
-            period: "",
-            detail: parsedImport.education,
-          }]
+        ? splitResumeEntries(parsedImport.education).map((entry, index) => {
+            const [heading = "", ...detailLines] = entry.split("\n");
+            const [school = "", major = "", degree = "", period = ""] = heading.split("｜");
+            return {
+              id: `education-${Date.now()}-${index}`,
+              school,
+              major,
+              degree,
+              period,
+              detail: detailLines.join("\n"),
+            };
+          })
         : [],
       projects: parsedImport.project
-        ? [{
-            id: `project-${Date.now()}`,
-            name: parsedImport.project.split("\n")[0] ?? "",
-            role: "",
-            period: "",
-            stack: "",
-            description: parsedImport.project,
-          }]
+        ? splitResumeEntries(parsedImport.project).map((entry, index) => {
+            const [heading = "", ...bodyLines] = entry.split("\n");
+            const [name = "", role = "", period = ""] = heading.split("｜");
+            const stackLine = bodyLines[0]?.startsWith("技术栈：") ? bodyLines.shift() ?? "" : "";
+            return {
+              id: `project-${Date.now()}-${index}`,
+              name,
+              role,
+              period,
+              stack: stackLine.replace(/^技术栈：/, ""),
+              description: bodyLines.join("\n"),
+            };
+          })
+        : [],
+      campusExperiences: parsedImport.campus
+        ? splitResumeEntries(parsedImport.campus).map((entry, index) => {
+            const [heading = "", ...descriptionLines] = entry.split("\n");
+            const [department = "", role = "", period = ""] = heading.split("｜");
+            return {
+              id: `campus-${Date.now()}-${index}`,
+              department: [department, role].filter(Boolean).join("｜"),
+              period,
+              description: descriptionLines.join("\n"),
+            };
+          })
         : [],
       skills: parsedImport.skills,
       certificate: parsedImport.certificate,
@@ -1873,7 +2116,10 @@ export default function Home() {
     }
     setAnalyzing(true);
     setAnalysisReady(false);
-    window.setTimeout(() => {
+    const expectedIdentity = identityRef.current;
+    jdAnalysisTimerRef.current = window.setTimeout(() => {
+      jdAnalysisTimerRef.current = null;
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
       const result = analyzeWithRules(jdText, current);
       setJdAnalysis(result);
       const nextSuggestions = buildRuleSuggestions(current, result);
@@ -2031,9 +2277,21 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
-    await signOut(session);
+    const previousSession = session;
+    identityRef.current = advanceIdentityEpoch(identityRef.current, null);
+    setPersistence(null);
     setSession(null);
+    resetSensitiveState();
     setReady(true);
+    await signOut(previousSession);
+  };
+
+  const deleteSnapshot = (snapshot: ResumeSnapshot) => {
+    if (!window.confirm(`永久删除当前简历的历史版本「${snapshot.label}」？此操作无法撤销。`)) return;
+    setHistories((items) =>
+      removeCurrentResumeSnapshot(items, current.id, snapshot.id),
+    );
+    setToast(`已删除历史版本 ${snapshot.label}`);
   };
 
   const navItems: { key: View; label: string; icon: string }[] = [
@@ -2285,6 +2543,7 @@ export default function Home() {
                   ["教育经历", Boolean(parsedImport.education)],
                   ["实习经历", Boolean(parsedImport.experience)],
                   ["项目经历", Boolean(parsedImport.project)],
+                  ["校园经历", Boolean(parsedImport.campus)],
                   ["技能", Boolean(parsedImport.skills)],
                   ["证书", Boolean(parsedImport.certificate)],
                   ["作品链接", Boolean(parsedImport.portfolio)],
@@ -2323,6 +2582,7 @@ export default function Home() {
                   ["education", "教育经历"],
                   ["experience", "实习 / 工作经历"],
                   ["project", "项目经历"],
+                  ["campus", "校园经历"],
                   ["skills", "技能特长"],
                   ["certificate", "证书荣誉"],
                   ["evaluation", "自我评价"],
@@ -2422,7 +2682,10 @@ export default function Home() {
                       V{snapshot.resume.version} · {snapshot.createdAt}
                     </span>
                   </div>
-                  <button onClick={() => restoreSnapshot(snapshot)}>恢复此版本</button>
+                  <div className="history-actions">
+                    <button onClick={() => restoreSnapshot(snapshot)}>恢复此版本</button>
+                    <button onClick={() => deleteSnapshot(snapshot)}>删除</button>
+                  </div>
                 </article>
               ))
             ) : (
@@ -2820,6 +3083,7 @@ function Editor({
   const [smartOnePage, setSmartOnePage] = useState(true);
   const [fitsOnePage, setFitsOnePage] = useState(true);
   const [density, setDensity] = useState<ResumeDensity>("normal");
+  const layoutDensity = effectiveResumeDensity(smartOnePage, density);
   const [pageCount, setPageCount] = useState(1);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [previewPageUrls, setPreviewPageUrls] = useState<string[]>([]);
@@ -2837,6 +3101,8 @@ function Editor({
   const paginationCycleRef = useRef({
     input: "",
     exhausted: false,
+    relaxedRejected: false,
+    generation: 0,
   });
   const paginationInput = useMemo(
     () => JSON.stringify([resume, template, smartOnePage]),
@@ -2853,16 +3119,25 @@ function Editor({
         if (inputChanged) {
           cycle.input = paginationInput;
           cycle.exhausted = false;
+          cycle.relaxedRejected = false;
+          cycle.generation += 1;
           if (density !== "normal") {
             setDensity("normal");
             return;
           }
         }
+        const measurementGeneration = cycle.generation;
 
         paper.style.setProperty("--resume-pages", "1");
         const a4PageHeight = 610 * (297 / 210);
         const pageTopPadding =
-          density === "ultra" ? 24 : density === "compact" ? 31 : 38;
+          layoutDensity === "relaxed"
+            ? 50
+            : layoutDensity === "ultra"
+              ? 24
+              : layoutDensity === "compact"
+                ? 31
+                : 38;
         const pageBottomPadding = pageTopPadding / 2;
         const usablePageHeight =
           a4PageHeight - pageTopPadding - pageBottomPadding;
@@ -2911,20 +3186,20 @@ function Editor({
           ) + pageBottomPadding;
         const naturallyFits = naturalBottom <= a4PageHeight + 2;
 
-        if (smartOnePage && !cycle.exhausted && !naturallyFits) {
-          if (density === "normal") {
-            setDensity("compact");
+        if (smartOnePage) {
+          const decision = decideSmartLayout({
+            density,
+            fitsOnePage: naturallyFits,
+            fillRatio: naturalBottom / a4PageHeight,
+            relaxedRejected: cycle.relaxedRejected,
+            exhausted: cycle.exhausted,
+          });
+          cycle.relaxedRejected = decision.relaxedRejected;
+          cycle.exhausted = decision.exhausted;
+          if (decision.density !== density) {
+            setDensity(decision.density);
             return;
           }
-          if (density === "compact") {
-            setDensity("ultra");
-            return;
-          }
-
-          // 最大压缩仍无法容纳时，回到较易读的紧凑密度并正常分页。
-          cycle.exhausted = true;
-          setDensity("compact");
-          return;
         }
 
         let cumulativeShift = 0;
@@ -2967,6 +3242,11 @@ function Editor({
         });
 
         validationFrame = window.requestAnimationFrame(() => {
+          if (
+            paginationCycleRef.current.generation !== measurementGeneration
+          ) {
+            return;
+          }
           const finalBottom =
             blocks.reduce(
               (maximum, block) =>
@@ -2988,9 +3268,17 @@ function Editor({
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(validationFrame);
     };
-  }, [density, paginationInput, smartOnePage]);
+  }, [density, layoutDensity, paginationInput, smartOnePage]);
 
   const toggleSmartOnePage = () => {
+    if (smartOnePage) {
+      const cycle = paginationCycleRef.current;
+      cycle.input = "";
+      cycle.exhausted = false;
+      cycle.relaxedRejected = false;
+      cycle.generation += 1;
+      setDensity("normal");
+    }
     setSmartOnePage((value) => !value);
   };
 
@@ -3018,24 +3306,32 @@ function Editor({
     const px = (value: number) => value * scale;
     const accent =
       template === "azure" ? "#315e88" : template === "sidebar" ? "#225e45" : "#1e2722";
-    const smart = density !== "normal";
-    const compact = density === "compact";
-    const ultra = density === "ultra";
+    const relaxed = layoutDensity === "relaxed";
+    const smart = layoutDensity === "compact" || layoutDensity === "ultra";
+    const compact = layoutDensity === "compact";
+    const ultra = layoutDensity === "ultra";
     const bodyFontSize = px(resume.fontSize * (4 / 3));
     const sectionHeadingFontSize = px(10.5 * (4 / 3));
     const bodyLineHeight = px(
-      resume.fontSize * (4 / 3) * (ultra ? 1.2 : compact ? 1.35 : 1.6),
+      resume.fontSize *
+        (4 / 3) *
+        (ultra ? 1.2 : compact ? 1.35 : relaxed ? 1.72 : 1.6),
     );
     const summaryLineHeight = px(
-      resume.fontSize * (4 / 3) * (ultra ? 1.22 : compact ? 1.35 : 1.55),
+      resume.fontSize *
+        (4 / 3) *
+        (ultra ? 1.22 : compact ? 1.35 : relaxed ? 1.68 : 1.55),
     );
-    const horizontalPadding = ultra ? 30 : compact ? 37 : 43;
-    const sideWidth = template === "sidebar" ? px(smart ? 130 : 141) : 0;
+    const horizontalPadding = ultra ? 30 : compact ? 37 : relaxed ? 50 : 43;
+    const sideWidth =
+      template === "sidebar" ? px(smart ? 130 : relaxed ? 150 : 141) : 0;
     const contentX =
-      template === "sidebar" ? px(smart ? 158 : 171) : px(horizontalPadding);
+      template === "sidebar"
+        ? px(smart ? 158 : relaxed ? 184 : 171)
+        : px(horizontalPadding);
     const rightPadding = px(horizontalPadding);
     const contentWidth = canvas.width - contentX - rightPadding;
-    const verticalPadding = ultra ? 24 : compact ? 31 : 38;
+    const verticalPadding = ultra ? 24 : compact ? 31 : relaxed ? 50 : 38;
     let y = px(verticalPadding);
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -3673,7 +3969,7 @@ function Editor({
                 })
               }
             >
-              {[6, 7, 8, 9, 10, 12].map((size) => (
+              {RESUME_FONT_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
                   {size}pt
                 </option>
@@ -3940,7 +4236,7 @@ function Editor({
                 resume={resume}
                 template={template}
                 paperRef={paperRef}
-                density={density}
+                density={layoutDensity}
                 pageCount={pageCount}
               />
             </div>
@@ -3967,7 +4263,9 @@ function Editor({
               <span>
                 {smartOnePage
                   ? fitsOnePage
-                    ? density === "normal"
+                    ? density === "relaxed"
+                      ? "✓ 内容较少，已舒展间距"
+                      : density === "normal"
                       ? "✓ 内容自然适配一页"
                       : density === "compact"
                         ? "✓ 已适度压缩为一页"
@@ -4423,7 +4721,7 @@ function ResumePreview({
   return (
     <article
       ref={paperRef}
-      className={`resume-paper template-${template}${density !== "normal" ? " smart-one-page" : ""}${density === "ultra" ? " ultra-compact" : ""}`}
+      className={`resume-paper template-${template} density-${density}${density === "compact" || density === "ultra" ? " smart-one-page" : ""}${density === "ultra" ? " ultra-compact" : ""}`}
       style={
         {
           "--resume-pages": pageCount,
@@ -4595,10 +4893,12 @@ function JDPage({
   goOptimize: () => void;
 }) {
   const result = analysis ?? {
-    score: 0,
     keywords: [],
     matched: [],
     missing: [],
+    evidence: [],
+    coverageRatio: 0,
+    coverageLabel: "未识别" as const,
     questions: [],
   };
   return (
@@ -4607,7 +4907,7 @@ function JDPage({
         <div>
           <p className="eyebrow">JD 本地规则匹配</p>
           <h1>看懂岗位，再调整简历</h1>
-          <p>系统只引用简历中已有内容，未体现的能力会明确标记。</p>
+          <p>系统只引用简历中已有内容，未体现的能力会明确标记。本地规则，不代表企业筛选结果。</p>
         </div>
         {analysisReady && (
           <button className="btn primary" onClick={goOptimize}>
@@ -4668,7 +4968,7 @@ function JDPage({
               "开始本地匹配"
             )}
           </button>
-          <p className="analysis-safety">不连接任何 AI 服务，不上传简历或 JD；建议仅基于已有文字和预设规则。</p>
+          <p className="analysis-safety">不连接任何 AI 服务，不上传简历或 JD；仅统计预设关键词的文字覆盖，本地规则不代表企业筛选结果。</p>
         </section>
 
         {!analysisReady && !analyzing && (
@@ -4679,7 +4979,7 @@ function JDPage({
               <b>简历</b>
             </div>
             <h2>分析结果将在这里展开</h2>
-            <p>你将获得岗位关键词、四维匹配评分、优化建议和面试问题。</p>
+            <p>你将获得关键词覆盖、证据分层、优化建议和面试问题。</p>
             <div className="placeholder-list">
               {["岗位要求结构化解析", "简历证据逐项对应", "5–8 个面试准备问题"].map(
                 (item) => (
@@ -4706,12 +5006,12 @@ function JDPage({
           <section className="analysis-result">
             <div className="result-hero">
               <div className="score-ring">
-                <strong>{result.score}</strong>
-                <span>匹配分</span>
+                <strong>{result.matched.length}/{result.keywords.length}</strong>
+                <span>关键词覆盖</span>
               </div>
               <div className="score-summary">
                 <span className="good-badge">
-                  {result.score >= 75 ? "匹配度较高" : result.score >= 50 ? "具备部分基础" : "需要重点补充"}
+                  {result.coverageLabel}
                 </span>
                 <h2>已比对 {result.keywords.length} 个岗位关键词</h2>
                 <p>
@@ -4720,6 +5020,7 @@ function JDPage({
                     : "暂未在简历中找到明确匹配关键词。"}
                   {result.missing.length ? ` ${result.missing.join("、")} 尚未体现。` : ""}
                 </p>
+                <small>只表示预设词典的文字命中，不评估真实能力或录用概率。</small>
               </div>
               <div className="score-delta">
                 <strong>{result.missing.length}</strong>
@@ -4769,14 +5070,13 @@ function MatchReport({
     <div className="result-content">
       <div className="breakdown-grid">
         {[
-          ["关键词覆盖", analysis.score, `${analysis.matched.length}/${analysis.keywords.length} 个关键词已有体现`],
-          ["岗位缺失项", Math.max(0, 100 - analysis.score), `${analysis.missing.length} 项要求尚未在简历中体现`],
-          ["成果表达", 60, "请人工检查是否包含可验证的动作与结果"],
-          ["事实安全", 100, "规则分析不会向简历添加不存在的信息"],
-        ].map(([label, score, note]) => (
+          ["关键词覆盖", `${analysis.matched.length}/${analysis.keywords.length}`, "预设词典中已有文字命中的项目"],
+          ["经历证据", String(analysis.evidence.filter((item) => item.level === "experience").length), "在教育、实习、项目或校园经历中命中"],
+          ["陈述证据", String(analysis.evidence.filter((item) => item.level === "listed").length), "仅在技能、简介或其他陈述中命中"],
+          ["待确认缺口", String(analysis.missing.length), "JD 出现、简历文字暂未体现；不等于不具备"],
+        ].map(([label, value, note]) => (
           <div className="breakdown-card" key={String(label)}>
-            <div><strong>{label}</strong><span>{score}</span></div>
-            <i><b style={{ width: `${score}%` }} /></i>
+            <div><strong>{label}</strong><span>{value}</span></div>
             <p>{note}</p>
           </div>
         ))}
@@ -4789,7 +5089,9 @@ function MatchReport({
           </div>
           {(analysis.matched.length ? analysis.matched : ["暂无明确匹配项"]).map((title) => (
             <div className="evidence-row" key={title}>
-              <strong>{title}</strong><p>简历正文中检测到对应关键词</p><em>已匹配</em>
+              <strong>{title}</strong>
+              <p>{analysis.evidence.find((item) => item.keyword === title)?.sources.join("、") || "未找到来源"}</p>
+              <em>{analysis.evidence.find((item) => item.keyword === title)?.level === "experience" ? "经历证据" : "陈述证据"}</em>
             </div>
           ))}
         </section>

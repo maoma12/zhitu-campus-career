@@ -2080,6 +2080,35 @@ select:focus-visible {
   font-size: var(--resume-body-font-size);
 }
 
+.resume-paper.density-relaxed {
+  padding: 50px 50px 25px;
+}
+
+.resume-paper.density-relaxed .paper-header {
+  padding-bottom: 16px;
+}
+
+.resume-paper.density-relaxed .paper-summary {
+  margin-bottom: 13px;
+  padding: 9px 12px;
+  line-height: 1.68;
+}
+
+.resume-paper.density-relaxed .paper-section {
+  margin-top: 13px;
+}
+
+.resume-paper.density-relaxed .paper-section h2 {
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+}
+
+.resume-paper.density-relaxed .paper-section > p,
+.resume-paper.density-relaxed .paper-entry p {
+  margin-top: 5px;
+  line-height: 1.62;
+}
+
 .paper-page-break {
   position: absolute;
   z-index: 3;
@@ -2339,6 +2368,11 @@ select:focus-visible {
   background: linear-gradient(to right, #1b4334 0 130px, #fff 130px);
 }
 
+.template-sidebar.density-relaxed {
+  padding-left: 184px;
+  background: linear-gradient(to right, #1b4334 0 150px, #fff 150px);
+}
+
 .template-sidebar .paper-header {
   position: relative;
 }
@@ -2382,6 +2416,11 @@ select:focus-visible {
   padding: 25px 37px 16px;
 }
 
+.template-azure.density-relaxed .paper-header {
+  margin: -50px -50px 0;
+  padding: 34px 50px 20px;
+}
+
 .template-azure.smart-one-page.ultra-compact .paper-header {
   margin: -24px -30px 0;
   padding: 20px 30px 12px;
@@ -2391,8 +2430,16 @@ select:focus-visible {
   left: -132px;
 }
 
+.template-sidebar.density-relaxed .paper-avatar {
+  left: -158px;
+}
+
 .template-sidebar.smart-one-page .paper-identity > div {
   left: -132px;
+}
+
+.template-sidebar.density-relaxed .paper-identity > div {
+  left: -158px;
 }
 
 .paper-status {

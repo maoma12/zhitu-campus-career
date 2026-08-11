@@ -1,0 +1,29 @@
+{
+  "fixtureLabel": "TEST FIXTURE - 完全虚构，不对应任何真人",
+  "name": "测试甲同学（TEST FIXTURE）",
+  "email": "fixture.candidate@example.com",
+  "phone": "TEST-000-0000",
+  "city": "星海市（虚构）",
+  "target": "虚构软件开发实习生",
+  "summary": "TEST FIXTURE：仅用于自动化测试。能够拆解虚构需求；所有经历、日期与数字均为合成数据。",
+  "education": [
+    "虚构大学｜软件工程｜本科｜2023.09 - 2027.06\nTEST FIXTURE：虚构 GPA 3.60/4.00；课程：数据结构、数据库系统。",
+    "示例交换学院｜计算机基础｜访学｜2025.07 - 2025.08\nTEST FIXTURE：完成 2 门虚构课程。"
+  ],
+  "experience": [
+    "虚构科技有限公司｜开发实习生｜2025.01 - 2025.03\nTEST FIXTURE：使用 Java、MySQL 完成 3 个虚构接口；整理 12 条合成测试用例。",
+    "示例数据工作室｜测试助理｜2024.07 - 2024.08\nTEST FIXTURE：记录 8 个虚构缺陷，并完成换行验证。\n第二行用于测试中文标点：逗号，分号；句号。"
+  ],
+  "project": [
+    "虚构校园导航系统｜项目负责人｜2025.04 - 2025.06\n技术栈：Java、Spring Boot、MySQL、Git\nTEST FIXTURE：构造 50 条合成地点数据；完成搜索与路线展示。",
+    "示例课程管理工具｜开发成员｜2024.10 - 2024.12\n技术栈：Python、SQL\nTEST FIXTURE：编写 6 个虚构单元测试。"
+  ],
+  "campus": [
+    "虚构大学开源社｜活动协助｜2024.09 - 2025.06\nTEST FIXTURE：组织 2 场虚构分享，覆盖 30 名合成参与者。",
+    "示例学院学习小组｜课程助教｜2023.10 - 2024.01\nTEST FIXTURE：整理 4 份虚构讲义。"
+  ],
+  "skills": "Java · Spring Boot · MySQL · Git · Python · SQL",
+  "certificate": "TEST FIXTURE：虚构程序设计竞赛校内奖；不代表真实荣誉。",
+  "evaluation": "TEST FIXTURE：重视事实边界、复核与可重复测试。",
+  "portfolio": "https://example.com/test-fixture-portfolio"
+}

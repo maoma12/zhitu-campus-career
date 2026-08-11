@@ -17,7 +17,7 @@ const publishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   "";
-const sessionKey = "zhitu-supabase-session";
+export const SESSION_STORAGE_KEY = "zhitu-supabase-session";
 
 export const cloudConfigured = Boolean(supabaseUrl && publishableKey);
 
@@ -40,10 +40,10 @@ async function readJson(response: Response) {
 
 function storeSession(session: AuthSession | null) {
   if (!session) {
-    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     return;
   }
-  localStorage.setItem(sessionKey, JSON.stringify(session));
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
 }
 
 function sessionFromPayload(payload: {
@@ -155,7 +155,7 @@ export async function consumeAuthRedirect(): Promise<AuthSession | null> {
 
 export async function getSession(): Promise<AuthSession | null> {
   if (!cloudConfigured) return null;
-  const raw = localStorage.getItem(sessionKey);
+  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
   if (!raw) return null;
   try {
     const session = JSON.parse(raw) as AuthSession;
@@ -187,16 +187,25 @@ export async function signOut(session: AuthSession | null) {
   storeSession(null);
 }
 
-export async function loadWorkspace<T>(session: AuthSession): Promise<T | null> {
+export async function loadWorkspace<T>(
+  session: AuthSession,
+  signal?: AbortSignal,
+): Promise<{ status: "found"; workspace: T } | { status: "empty" }> {
   const response = await fetch(
     `${supabaseUrl}/rest/v1/resume_workspaces?select=payload&user_id=eq.${encodeURIComponent(session.user.id)}&limit=1`,
-    { headers: headers(session.accessToken) },
+    { headers: headers(session.accessToken), signal },
   );
   const rows = (await readJson(response)) as { payload: T }[];
-  return rows[0]?.payload ?? null;
+  return rows[0]
+    ? { status: "found", workspace: rows[0].payload }
+    : { status: "empty" };
 }
 
-export async function saveWorkspace<T>(session: AuthSession, payload: T) {
+export async function saveWorkspace<T>(
+  session: AuthSession,
+  payload: T,
+  signal?: AbortSignal,
+) {
   const response = await fetch(
     `${supabaseUrl}/rest/v1/resume_workspaces?on_conflict=user_id`,
     {
@@ -210,6 +219,7 @@ export async function saveWorkspace<T>(session: AuthSession, payload: T) {
         payload,
         updated_at: new Date().toISOString(),
       }),
+      signal,
     },
   );
   await readJson(response);

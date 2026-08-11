@@ -10,7 +10,8 @@
     "build": "vinext build",
     "build:cloudbase": "npm run build && node scripts/build-cloudbase.mjs",
     "start": "vinext start",
-    "test": "npm run lint && npm run build",
+    "test": "npm run test:unit && npm run lint && npm run build",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.ts",
     "lint": "eslint app db worker drizzle.config.ts next.config.ts vite.config.ts eslint.config.mjs",
     "db:generate": "drizzle-kit generate"
   },
