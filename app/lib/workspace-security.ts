@@ -86,3 +86,56 @@ export function removeCurrentResumeSnapshot<T extends { id: string }>(
     ),
   };
 }
+
+export type ResumeDeletionResult<T, H> = {
+  resumes: T[];
+  currentId: string;
+  histories: Record<string, H[]>;
+  deleted: boolean;
+  createdReplacement: boolean;
+};
+
+export function removeResumeFromWorkspace<T extends { id: string }, H>(
+  resumes: readonly T[],
+  currentId: string,
+  histories: Record<string, H[]>,
+  targetId: string,
+  createCleanResume: () => T,
+): ResumeDeletionResult<T, H> {
+  const targetIndex = resumes.findIndex((resume) => resume.id === targetId);
+  if (targetIndex < 0) {
+    return {
+      resumes: [...resumes],
+      currentId,
+      histories,
+      deleted: false,
+      createdReplacement: false,
+    };
+  }
+
+  const remaining = resumes.filter((resume) => resume.id !== targetId);
+  const nextHistories = { ...histories };
+  delete nextHistories[targetId];
+
+  if (remaining.length === 0) {
+    const replacement = createCleanResume();
+    return {
+      resumes: [replacement],
+      currentId: replacement.id,
+      histories: nextHistories,
+      deleted: true,
+      createdReplacement: true,
+    };
+  }
+
+  return {
+    resumes: remaining,
+    currentId:
+      currentId === targetId
+        ? remaining[Math.min(targetIndex, remaining.length - 1)].id
+        : currentId,
+    histories: nextHistories,
+    deleted: true,
+    createdReplacement: false,
+  };
+}

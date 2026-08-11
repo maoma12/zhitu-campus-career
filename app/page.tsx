@@ -36,6 +36,7 @@ import {
   advanceIdentityEpoch,
   isCurrentIdentity,
   removeCurrentResumeSnapshot,
+  removeResumeFromWorkspace,
   resolveAuthenticatedWorkspace,
 } from "./lib/workspace-security";
 import {
@@ -1898,14 +1899,35 @@ export default function Home() {
   };
 
   const deleteResume = (resume: Resume) => {
-    if (resumes.length === 1) {
-      setToast("请至少保留一份简历");
+    if (
+      !window.confirm(
+        `永久删除简历「${resume.name}」？\n\n仅删除这份简历及其历史版本，无法撤销。`,
+      )
+    ) {
       return;
     }
-    if (!window.confirm(`确定删除「${resume.name}」吗？`)) return;
-    setResumes((items) => items.filter((item) => item.id !== resume.id));
-    if (currentId === resume.id) setCurrentId(resumes[0].id);
-    setToast("简历已删除");
+
+    const result = removeResumeFromWorkspace(
+      resumes,
+      currentId,
+      histories,
+      resume.id,
+      () => ({
+        ...cloneResume(blankResume),
+        id: `resume-${Date.now()}`,
+        updated: "刚刚",
+      }),
+    );
+    if (!result.deleted) return;
+
+    setResumes(result.resumes);
+    setCurrentId(result.currentId);
+    setHistories(result.histories);
+    setToast(
+      result.createdReplacement
+        ? `已删除「${resume.name}」，并创建一份干净空白简历`
+        : `已删除简历「${resume.name}」及其历史版本`,
+    );
   };
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2521,22 +2543,33 @@ export default function Home() {
       )}
 
       {showImport && (
-        <Modal title="导入旧简历" onClose={() => setShowImport(false)}>
-          <div className="parse-summary">
-            <span className="success-icon">{parsedImport ? "✓" : "…"}</span>
-            <div>
-              <strong>{importFileName}</strong>
-              <p>{importStatus}</p>
+        <Modal
+          title="导入旧简历"
+          className="import-modal"
+          onClose={() => setShowImport(false)}
+        >
+          <div className="import-modal-status">
+            <div className="parse-summary">
+              <span className="success-icon">{parsedImport ? "✓" : "…"}</span>
+              <div>
+                <strong>{importFileName}</strong>
+                <p>{importStatus}</p>
+              </div>
             </div>
+            {!parsedImport && importProgress > 0 && (
+              <div className="import-progress">
+                <i><b style={{ width: `${importProgress}%` }} /></i>
+                <span>{importProgress}%</span>
+              </div>
+            )}
           </div>
-          {!parsedImport && importProgress > 0 && (
-            <div className="import-progress">
-              <i><b style={{ width: `${importProgress}%` }} /></i>
-              <span>{importProgress}%</span>
-            </div>
-          )}
-          {parsedImport && (
-            <>
+          <div
+            className="import-modal-scroll"
+            tabIndex={0}
+            aria-label="导入字段校对内容"
+          >
+            {parsedImport && (
+              <>
               <div className="parse-tags">
                 {[
                   ["基本信息", Boolean(parsedImport.name || parsedImport.email || parsedImport.phone)],
@@ -2601,17 +2634,22 @@ export default function Home() {
                   </label>
                 ))}
               </details>
-            </>
-          )}
-          <p className="modal-note">
-            文件只在当前浏览器中解析。双栏、表格和扫描件仍可能出现错序，请先校对字段映射再导入。
-          </p>
-          <div className="modal-actions">
+              </>
+            )}
+            <p className="modal-note">
+              文件只在当前浏览器中解析。双栏、表格和扫描件仍可能出现错序，请先校对字段映射再导入。
+            </p>
+          </div>
+          <div className="modal-actions import-modal-actions">
             <button className="btn ghost" onClick={() => setShowImport(false)}>
-              返回
+              取消
             </button>
             <button className="btn primary" onClick={confirmImport} disabled={!parsedImport}>
-              导入并校对
+              {parsedImport
+                ? "导入并校对"
+                : importStatus.startsWith("正在")
+                  ? "正在解析…"
+                  : "无法导入"}
             </button>
           </div>
         </Modal>
@@ -2950,7 +2988,16 @@ function Dashboard({
                 <div>
                   <button onClick={() => openHistory(resume.id)}>历史</button>
                   <button onClick={() => duplicateResume(resume)}>复制</button>
-                  <button onClick={() => deleteResume(resume)}>删除</button>
+                  <button
+                    className="delete-resume-button"
+                    aria-label={`删除简历 ${resume.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      deleteResume(resume);
+                    }}
+                  >
+                    删除简历
+                  </button>
                   <button className="edit-link" onClick={() => openResume(resume.id)}>
                     继续编辑
                   </button>
@@ -5433,17 +5480,19 @@ function TruthNotice() {
 
 function Modal({
   title,
+  className = "",
   onClose,
   children,
 }: {
   title: string;
+  className?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
-        className="modal"
+        className={`modal${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

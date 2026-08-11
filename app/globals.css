@@ -960,6 +960,8 @@ select:focus-visible {
 .card-meta div {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
@@ -975,6 +977,25 @@ select:focus-visible {
   margin-left: 3px;
   color: var(--green);
   font-weight: 800;
+}
+
+.card-meta .delete-resume-button {
+  min-height: 28px;
+  border: 1px solid #e8c9c4;
+  border-radius: 7px;
+  background: #fff7f5;
+  color: #a5483e;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.card-meta .delete-resume-button:hover,
+.card-meta .delete-resume-button:focus-visible {
+  border-color: #c8877e;
+  outline: none;
+  background: #fdebe7;
+  color: #842f26;
 }
 
 .new-resume-card {
@@ -3601,6 +3622,58 @@ select:focus-visible {
   box-shadow: 0 35px 100px rgba(12, 31, 21, 0.28);
 }
 
+.modal.import-modal {
+  display: grid;
+  width: min(760px, 100%);
+  height: min(860px, calc(100dvh - 32px));
+  max-height: calc(100vh - 32px);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.modal.import-modal > header {
+  margin-bottom: 0;
+}
+
+.import-modal-status {
+  min-width: 0;
+}
+
+.import-modal-status .import-progress {
+  margin: 10px 0 0;
+}
+
+.import-modal-scroll {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 0 6px 12px 0;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+.import-modal-scroll:focus-visible {
+  outline: 2px solid #77ae94;
+  outline-offset: 2px;
+}
+
+.import-modal-scroll textarea {
+  max-height: 220px;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y;
+}
+
+.import-modal-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 0;
+  border-top: 1px solid #e5ece8;
+  background: #fff;
+  padding-top: 14px;
+}
+
 .modal > header {
   display: flex;
   align-items: center;
@@ -4003,6 +4076,27 @@ select:focus-visible {
 }
 
 @media (max-width: 620px) {
+  .modal-backdrop {
+    padding: max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+  .modal.import-modal {
+    height: calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    gap: 10px;
+    border-radius: 13px;
+    padding: 14px;
+  }
+  .import-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .card-meta {
+    align-items: flex-start;
+    gap: 8px;
+  }
   .page-header {
     flex-direction: column;
   }
