@@ -6,6 +6,7 @@ import {
   ChangeEvent,
   RefObject,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -47,14 +48,34 @@ import {
   decideSmartLayout,
   effectiveResumeDensity,
   normalizeResumeFontSize,
+  normalizeResumeHeadingFontSize,
   RESUME_FONT_SIZE_OPTIONS,
+  RESUME_HEADING_FONT_SIZE_OPTIONS,
   ResumeDensity,
   ResumeFontSize,
+  ResumeHeadingFontSize,
 } from "./lib/resume-layout";
+import {
+  deriveWorkspaceActivities,
+  isMeaningfulResumeEntry,
+  isPreviewModuleVisible,
+  visiblePreviewModuleKeys,
+} from "./lib/resume-content";
+import {
+  formatResumePeriod,
+  parseResumePeriod,
+  validateMonthRange,
+} from "./lib/resume-period";
+import {
+  PREVIEW_A4_WIDTH_PX,
+  PREVIEW_ZOOM_MAX,
+  PREVIEW_ZOOM_MIN,
+  applyManualPreviewZoom,
+  calculateFitWidthZoom,
+} from "./lib/preview-zoom";
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
-type ResumeHeadingFontSize = 8 | 9 | 10.5 | 12;
 type StandardModuleKey =
   | "basic"
   | "experience"
@@ -226,7 +247,7 @@ const seedResume: Resume = {
   name: "Java 后端开发校招简历",
   target: "Java 后端开发实习生",
   fontSize: 9,
-  headingFontSize: 10.5,
+  headingFontSize: 10,
   updated: "刚刚",
   completion: 88,
   version: 3,
@@ -289,7 +310,7 @@ const blankResume: Resume = {
   name: "我的第一份简历",
   target: "",
   fontSize: 9,
-  headingFontSize: 10.5,
+  headingFontSize: 10,
   updated: "刚刚",
   completion: 10,
   version: 1,
@@ -624,14 +645,6 @@ function safeNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function normalizeResumeHeadingFontSize(
-  value: unknown,
-): ResumeHeadingFontSize {
-  return value === 8 || value === 9 || value === 10.5 || value === 12
-    ? value
-    : 10.5;
-}
-
 function normalizeModuleList(
   value: unknown,
   fallback: ModuleKey[],
@@ -874,14 +887,12 @@ function FormattedText({ value }: { value: string }) {
 function resumeExportSections(resume: Resume): ExportSection[] {
   const sections: ExportSection[] = [];
   resume.moduleOrder
-    .filter(
-      (key) => key !== "basic" && !resume.hiddenModules.includes(key),
-    )
+    .filter((key) => key !== "basic" && isPreviewModuleVisible(resume, key))
     .forEach((key) => {
       if (key === "experience" && resume.experiences.length) {
         sections.push({
           heading: moduleLabel(resume, key),
-          lines: resume.experiences.flatMap((item) => [
+          lines: resume.experiences.filter(isMeaningfulResumeEntry).flatMap((item) => [
             `${item.company}｜${item.role}｜${item.period}`,
             item.description,
           ]),
@@ -889,7 +900,7 @@ function resumeExportSections(resume: Resume): ExportSection[] {
       } else if (key === "education" && resume.educations.length) {
         sections.push({
           heading: moduleLabel(resume, key),
-          lines: resume.educations.flatMap((item) => [
+          lines: resume.educations.filter(isMeaningfulResumeEntry).flatMap((item) => [
             `${item.school}｜${item.major}｜${item.degree}｜${item.period}`,
             item.detail,
           ]),
@@ -897,7 +908,7 @@ function resumeExportSections(resume: Resume): ExportSection[] {
       } else if (key === "project" && resume.projects.length) {
         sections.push({
           heading: moduleLabel(resume, key),
-          lines: resume.projects.flatMap((item) => [
+          lines: resume.projects.filter(isMeaningfulResumeEntry).flatMap((item) => [
             `${item.name}｜${item.role}｜${item.period}`,
             item.stack ? `技术栈：${item.stack}` : "",
             item.description,
@@ -906,7 +917,7 @@ function resumeExportSections(resume: Resume): ExportSection[] {
       } else if (key === "campus" && resume.campusExperiences.length) {
         sections.push({
           heading: moduleLabel(resume, key),
-          lines: resume.campusExperiences.flatMap((item) => [
+          lines: resume.campusExperiences.filter(isMeaningfulResumeEntry).flatMap((item) => [
             `${item.department}｜${item.period}`,
             item.description,
           ]),
@@ -1270,33 +1281,33 @@ function buildDocx(resume: Resume) {
   const entryTitle = (text: string) =>
     paragraph(text, { bold: true, size: 20, before: 40, after: 45, keepNext: true });
   const bodyBlocks: string[] = [];
-  if (!resume.hiddenModules.includes("experience") && resume.experiences.length) {
+  if (isPreviewModuleVisible(resume, "experience")) {
     bodyBlocks.push(sectionHeading("实习经历"));
-    resume.experiences.forEach((item) => {
+    resume.experiences.filter(isMeaningfulResumeEntry).forEach((item) => {
       bodyBlocks.push(entryTitle(`${item.company} ｜ ${item.role} ｜ ${item.period}`));
       if (item.description) bodyBlocks.push(paragraph(item.description));
     });
   }
-  if (!resume.hiddenModules.includes("education") && resume.educations.length) {
+  if (isPreviewModuleVisible(resume, "education")) {
     bodyBlocks.push(sectionHeading("教育经历"));
-    resume.educations.forEach((item) => {
+    resume.educations.filter(isMeaningfulResumeEntry).forEach((item) => {
       bodyBlocks.push(
         entryTitle(`${item.school} ｜ ${item.major} ｜ ${item.degree} ｜ ${item.period}`),
       );
       if (item.detail) bodyBlocks.push(paragraph(item.detail));
     });
   }
-  if (!resume.hiddenModules.includes("project") && resume.projects.length) {
+  if (isPreviewModuleVisible(resume, "project")) {
     bodyBlocks.push(sectionHeading("项目经历"));
-    resume.projects.forEach((item) => {
+    resume.projects.filter(isMeaningfulResumeEntry).forEach((item) => {
       bodyBlocks.push(entryTitle(`${item.name} ｜ ${item.role} ｜ ${item.period}`));
       if (item.stack) bodyBlocks.push(paragraph(`技术栈：${item.stack}`, { bold: true }));
       if (item.description) bodyBlocks.push(paragraph(item.description));
     });
   }
-  if (!resume.hiddenModules.includes("campus") && resume.campusExperiences.length) {
+  if (isPreviewModuleVisible(resume, "campus")) {
     bodyBlocks.push(sectionHeading("校园经历"));
-    resume.campusExperiences.forEach((item) => {
+    resume.campusExperiences.filter(isMeaningfulResumeEntry).forEach((item) => {
       bodyBlocks.push(entryTitle(`${item.department} ｜ ${item.period}`));
       if (item.description) bodyBlocks.push(paragraph(item.description));
     });
@@ -1308,7 +1319,7 @@ function buildDocx(resume: Resume) {
     ["portfolio", "作品链接", resume.portfolio],
   ];
   simpleSections.forEach(([key, heading, text]) => {
-    if (!resume.hiddenModules.includes(key) && text.trim()) {
+    if (isPreviewModuleVisible(resume, key) && text.trim()) {
       bodyBlocks.push(sectionHeading(heading), paragraph(text));
     }
   });
@@ -2413,6 +2424,7 @@ export default function Home() {
         {view === "dashboard" && (
           <Dashboard
             resumes={resumes}
+            histories={histories}
             openResume={openResume}
             duplicateResume={duplicateResume}
             deleteResume={deleteResume}
@@ -2874,6 +2886,7 @@ function AuthPage({
 
 function Dashboard({
   resumes,
+  histories,
   openResume,
   duplicateResume,
   deleteResume,
@@ -2883,6 +2896,7 @@ function Dashboard({
   goJD,
 }: {
   resumes: Resume[];
+  histories: ResumeHistory;
   openResume: (id: string) => void;
   duplicateResume: (resume: Resume) => void;
   deleteResume: (resume: Resume) => void;
@@ -2895,6 +2909,7 @@ function Dashboard({
     resumes
       .map((resume) => resume.basic.name.trim())
       .find(Boolean) || "求职同学";
+  const activities = deriveWorkspaceActivities(resumes, histories);
 
   return (
     <div className="page dashboard-page">
@@ -3021,20 +3036,22 @@ function Dashboard({
               <span>你的简历变化都可追溯</span>
             </div>
           </div>
-          {[
-            ["刚刚", "自动保存了 Java 后端开发校招简历", "保存"],
-            ["昨天 18:42", "创建了产品经理实习简历 · V2", "版本"],
-            ["7月26日", "完成腾讯云后端开发实习生 JD 分析", "匹配"],
-          ].map(([time, text, tag]) => (
-            <div className="activity-row" key={text}>
-              <span className="activity-dot" />
-              <div>
-                <strong>{text}</strong>
-                <small>{time}</small>
+          {activities.length ? (
+            activities.map((activity) => (
+              <div className="activity-row" key={`${activity.resumeId}-${activity.id}`}>
+                <span className="activity-dot" />
+                <div>
+                  <strong>{activity.label}</strong>
+                  <small>{activity.resumeName} · {activity.createdAt}</small>
+                </div>
+                <em>版本</em>
               </div>
-              <em>{tag}</em>
+            ))
+          ) : (
+            <div className="activity-empty">
+              暂无历史动态；保存版本后会显示在这里。
             </div>
-          ))}
+          )}
         </section>
 
         <aside className="next-panel">
@@ -3135,10 +3152,12 @@ function Editor({
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [previewPageUrls, setPreviewPageUrls] = useState<string[]>([]);
   const [previewPageHashes, setPreviewPageHashes] = useState<string[]>([]);
+  const [previewZoom, setPreviewZoom] = useState({ zoom: 100, fitWidth: true });
   const [exportOpen, setExportOpen] = useState(false);
   const [addModuleOpen, setAddModuleOpen] = useState(false);
   const [newModuleName, setNewModuleName] = useState("");
   const paperRef = useRef<HTMLElement>(null);
+  const paperStageRef = useRef<HTMLDivElement>(null);
   const sharedPreviewRef = useRef<{
     revision: number;
     render: SharedPreviewRender;
@@ -3358,7 +3377,7 @@ function Editor({
     const compact = layoutDensity === "compact";
     const ultra = layoutDensity === "ultra";
     const bodyFontSize = px(resume.fontSize * (4 / 3));
-    const sectionHeadingFontSize = px(10.5 * (4 / 3));
+    const sectionHeadingFontSize = px(resume.headingFontSize * (4 / 3));
     const bodyLineHeight = px(
       resume.fontSize *
         (4 / 3) *
@@ -3629,19 +3648,17 @@ function Editor({
       y += px(5);
     }
     resume.moduleOrder
-      .filter(
-        (key) => key !== "basic" && !resume.hiddenModules.includes(key),
-      )
+      .filter((key) => key !== "basic" && isPreviewModuleVisible(resume, key))
       .forEach((key) => {
         drawSectionHeading(moduleLabel(resume, key));
         if (key === "experience") {
-          resume.experiences.forEach((item) =>
+          resume.experiences.filter(isMeaningfulResumeEntry).forEach((item) =>
             drawEntry(item.company, item.role, item.period, item.description),
           );
           return;
         }
         if (key === "education") {
-          resume.educations.forEach((item) =>
+          resume.educations.filter(isMeaningfulResumeEntry).forEach((item) =>
             drawEntry(
               item.school,
               [item.major, item.degree].filter(Boolean).join(" · "),
@@ -3652,7 +3669,7 @@ function Editor({
           return;
         }
         if (key === "project") {
-          resume.projects.forEach((item) =>
+          resume.projects.filter(isMeaningfulResumeEntry).forEach((item) =>
             drawEntry(
               item.name,
               [item.role, item.stack].filter(Boolean).join(" · "),
@@ -3663,7 +3680,7 @@ function Editor({
           return;
         }
         if (key === "campus") {
-          resume.campusExperiences.forEach((item) =>
+          resume.campusExperiences.filter(isMeaningfulResumeEntry).forEach((item) =>
             drawEntry(
               item.department,
               "",
@@ -3686,7 +3703,7 @@ function Editor({
           : resume.customModules.find((item) => item.id === key)?.content || "";
         y += px(3);
         drawWrapped(
-          text || "暂未填写",
+          text,
           bodyFontSize,
           400,
           "#252b27",
@@ -3981,6 +3998,25 @@ function Editor({
     [],
   );
 
+  useEffect(() => {
+    if (!previewZoom.fitWidth) return;
+    const stage = paperStageRef.current;
+    if (!stage) return;
+    const updateFitWidth = () => {
+      const style = window.getComputedStyle(stage);
+      const horizontalPadding =
+        Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+      const zoom = calculateFitWidthZoom(stage.clientWidth, horizontalPadding);
+      setPreviewZoom((state) =>
+        state.fitWidth && state.zoom !== zoom ? { zoom, fitWidth: true } : state,
+      );
+    };
+    updateFitWidth();
+    const observer = new ResizeObserver(updateFitWidth);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [previewZoom.fitWidth]);
+
   return (
     <div className="editor-page">
       <header className="editor-topbar">
@@ -4036,7 +4072,7 @@ function Editor({
                 })
               }
             >
-              {[8, 9, 10.5, 12].map((size) => (
+              {RESUME_HEADING_FONT_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
                   {size}pt
                 </option>
@@ -4270,14 +4306,35 @@ function Editor({
               实时预览
               <span className="a4-badge">A4 · 210 × 297 mm</span>
             </div>
-            <div>
-              <button>−</button>
-              <span>82%</span>
-              <button>＋</button>
-              <button className="fit-button">适应宽度</button>
+            <div className="preview-zoom-controls">
+              <button
+                aria-label="缩小简历预览"
+                disabled={previewZoom.zoom <= PREVIEW_ZOOM_MIN}
+                onClick={() => setPreviewZoom((state) => applyManualPreviewZoom(state, -1))}
+              >−</button>
+              <span aria-live="polite">{previewZoom.zoom}%</span>
+              <button
+                aria-label="放大简历预览"
+                disabled={previewZoom.zoom >= PREVIEW_ZOOM_MAX}
+                onClick={() => setPreviewZoom((state) => applyManualPreviewZoom(state, 1))}
+              >＋</button>
+              <button
+                className={previewZoom.fitWidth ? "fit-button active" : "fit-button"}
+                aria-pressed={previewZoom.fitWidth}
+                onClick={() => {
+                  const stage = paperStageRef.current;
+                  if (!stage) return;
+                  const style = window.getComputedStyle(stage);
+                  const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+                  setPreviewZoom({
+                    zoom: calculateFitWidthZoom(stage.clientWidth, padding),
+                    fitWidth: true,
+                  });
+                }}
+              >适应宽度</button>
             </div>
           </div>
-          <div className="paper-stage">
+          <div className="paper-stage" ref={paperStageRef}>
             <div className="resume-render-source" aria-hidden="true">
               <ResumePreview
                 resume={resume}
@@ -4288,7 +4345,16 @@ function Editor({
               />
             </div>
             {previewPageUrls.length ? (
-              <div className="shared-preview-pages">
+              <div
+                className="shared-preview-pages"
+                data-preview-zoom={previewZoom.zoom}
+                style={
+                  {
+                    "--preview-width": `${(PREVIEW_A4_WIDTH_PX * previewZoom.zoom) / 100}px`,
+                    "--preview-page-gap": `${(18 * previewZoom.zoom) / 100}px`,
+                  } as React.CSSProperties
+                }
+              >
                 {previewPageUrls.map((url, index) => (
                   <img
                     alt={`简历预览第 ${index + 1} 页`}
@@ -4501,7 +4567,7 @@ function ModuleForm({
               <div className="form-grid two">
                 <Field label="公司名称" value={entry.company} onChange={(v) => updateEntry("experiences", entry.id, { company: v })} />
                 <Field label="职位" value={entry.role} onChange={(v) => updateEntry("experiences", entry.id, { role: v })} />
-                <Field label="时间" value={entry.period} onChange={(v) => updateEntry("experiences", entry.id, { period: v })} />
+                <MonthRangePicker label="时间" value={entry.period} onChange={(v) => updateEntry("experiences", entry.id, { period: v })} />
               </div>
               <TextField
                 label="职责与成果"
@@ -4537,7 +4603,7 @@ function ModuleForm({
                 <Field label="学校" value={entry.school} onChange={(v) => updateEntry("educations", entry.id, { school: v })} />
                 <Field label="专业" value={entry.major} onChange={(v) => updateEntry("educations", entry.id, { major: v })} />
                 <Field label="学历" value={entry.degree} onChange={(v) => updateEntry("educations", entry.id, { degree: v })} />
-                <Field label="时间" value={entry.period} onChange={(v) => updateEntry("educations", entry.id, { period: v })} />
+                <MonthRangePicker label="时间" value={entry.period} onChange={(v) => updateEntry("educations", entry.id, { period: v })} />
               </div>
               <TextField label="成绩、排名与课程" value={entry.detail} onChange={(v) => updateEntry("educations", entry.id, { detail: v })} />
             </div>
@@ -4565,7 +4631,7 @@ function ModuleForm({
               <div className="form-grid two">
                 <Field label="项目名称" value={entry.name} onChange={(v) => updateEntry("projects", entry.id, { name: v })} />
                 <Field label="个人角色" value={entry.role} onChange={(v) => updateEntry("projects", entry.id, { role: v })} />
-                <Field label="项目时间" value={entry.period} onChange={(v) => updateEntry("projects", entry.id, { period: v })} />
+                <MonthRangePicker label="项目时间" value={entry.period} onChange={(v) => updateEntry("projects", entry.id, { period: v })} />
                 <Field label="技术栈" value={entry.stack} onChange={(v) => updateEntry("projects", entry.id, { stack: v })} />
               </div>
               <TextField label="项目背景、个人贡献与成果" value={entry.description} onChange={(v) => updateEntry("projects", entry.id, { description: v })} rows={6} />
@@ -4604,7 +4670,7 @@ function ModuleForm({
                     })
                   }
                 />
-                <Field
+                <MonthRangePicker
                   label="时间"
                   value={entry.period}
                   onChange={(value) =>
@@ -4762,8 +4828,8 @@ function ResumePreview({
   pageCount: number;
 }) {
   const visible = useMemo(
-    () => resume.moduleOrder.filter((key) => !resume.hiddenModules.includes(key)),
-    [resume.moduleOrder, resume.hiddenModules],
+    () => visiblePreviewModuleKeys(resume),
+    [resume],
   );
   return (
     <article
@@ -4788,12 +4854,16 @@ function ResumePreview({
       <header className="paper-header" data-pagination-block>
         <div className="paper-identity">
           <h1>{resume.basic.name || "你的姓名"}</h1>
-          <p>{resume.basic.target || "求职目标"}</p>
-          <div>
-            <span>{resume.basic.phone || "手机号"}</span>
-            <span>{resume.basic.email || "邮箱"}</span>
-            <span>{resume.basic.city || "城市"}</span>
-          </div>
+          {resume.basic.target.trim() && <p>{resume.basic.target}</p>}
+          {[resume.basic.phone, resume.basic.email, resume.basic.city].some(
+            (value) => value.trim(),
+          ) && (
+            <div>
+              {[resume.basic.phone, resume.basic.email, resume.basic.city]
+                .filter((value) => value.trim())
+                .map((value, index) => <span key={`${index}-${value}`}>{value}</span>)}
+            </div>
+          )}
         </div>
         <div className="paper-avatar">
           {resume.basic.avatar ? (
@@ -4804,7 +4874,7 @@ function ResumePreview({
           )}
         </div>
       </header>
-      {resume.basic.summary && (
+      {resume.basic.summary.trim() && (
         <p className="paper-summary" data-pagination-block>
           <FormattedText value={resume.basic.summary} />
         </p>
@@ -4821,7 +4891,7 @@ function ResumePreview({
                 {moduleLabel(resume, key)}
               </h2>
               {key === "experience" &&
-                resume.experiences.map((entry) => (
+                resume.experiences.filter(isMeaningfulResumeEntry).map((entry) => (
                   <PaperEntry
                     key={entry.id}
                     title={entry.company}
@@ -4831,7 +4901,7 @@ function ResumePreview({
                   />
                 ))}
               {key === "education" &&
-                resume.educations.map((entry) => (
+                resume.educations.filter(isMeaningfulResumeEntry).map((entry) => (
                   <PaperEntry
                     key={entry.id}
                     title={entry.school}
@@ -4841,7 +4911,7 @@ function ResumePreview({
                   />
                 ))}
               {key === "project" &&
-                resume.projects.map((entry) => (
+                resume.projects.filter(isMeaningfulResumeEntry).map((entry) => (
                   <PaperEntry
                     key={entry.id}
                     title={entry.name}
@@ -4851,7 +4921,7 @@ function ResumePreview({
                   />
                 ))}
               {key === "campus" &&
-                resume.campusExperiences.map((entry) => (
+                resume.campusExperiences.filter(isMeaningfulResumeEntry).map((entry) => (
                   <PaperEntry
                     key={entry.id}
                     title={entry.department}
@@ -4860,16 +4930,16 @@ function ResumePreview({
                     text={entry.description}
                   />
                 ))}
-              {key === "skills" && <p data-pagination-block><FormattedText value={resume.skills || "暂未填写"} /></p>}
-              {key === "certificate" && <p data-pagination-block><FormattedText value={resume.certificate || "暂未填写"} /></p>}
-              {key === "evaluation" && <p data-pagination-block><FormattedText value={resume.evaluation || "暂未填写"} /></p>}
-              {key === "portfolio" && <p data-pagination-block><FormattedText value={resume.portfolio || "暂未填写"} /></p>}
+              {key === "skills" && <p data-pagination-block><FormattedText value={resume.skills} /></p>}
+              {key === "certificate" && <p data-pagination-block><FormattedText value={resume.certificate} /></p>}
+              {key === "evaluation" && <p data-pagination-block><FormattedText value={resume.evaluation} /></p>}
+              {key === "portfolio" && <p data-pagination-block><FormattedText value={resume.portfolio} /></p>}
               {!isStandardModuleKey(key) && (
                 <p data-pagination-block>
                   <FormattedText
                     value={
                       resume.customModules.find((item) => item.id === key)
-                        ?.content || "暂未填写"
+                        ?.content || ""
                     }
                   />
                 </p>
@@ -5367,6 +5437,126 @@ function OptimizePage({
         </aside>
       </div>
     </div>
+  );
+}
+
+function MonthRangePicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const initial = parseResumePeriod(value);
+  const [startMonth, setStartMonth] = useState(initial.parsed ? initial.startMonth : "");
+  const [endMonth, setEndMonth] = useState(initial.parsed ? initial.endMonth : "");
+  const [present, setPresent] = useState(initial.parsed ? initial.present : false);
+  const [editing, setEditing] = useState(initial.parsed);
+  const [error, setError] = useState("");
+  const [syncedValue, setSyncedValue] = useState(value);
+  const errorId = useId();
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    const parsed = parseResumePeriod(value);
+    if (!parsed.parsed) {
+      setEditing(false);
+      setError("");
+    } else {
+      setStartMonth(parsed.startMonth);
+      setEndMonth(parsed.endMonth);
+      setPresent(parsed.present);
+      setEditing(true);
+      setError("");
+    }
+  }
+
+  const commit = (nextStart: string, nextEnd: string, nextPresent: boolean) => {
+    const nextError = validateMonthRange(nextStart, nextEnd, nextPresent);
+    setError(nextError);
+    if (!nextError) onChange(formatResumePeriod(nextStart, nextEnd, nextPresent));
+  };
+
+  if (!editing) {
+    return (
+      <div className="field month-range-field">
+        <span>{label}</span>
+        <div className="period-preserved">
+          <span>保留的导入时间：{value}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(true);
+              setStartMonth("");
+              setEndMonth("");
+              setPresent(false);
+              setError("");
+            }}
+          >
+            重新选择
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <fieldset className="field month-range-field" aria-describedby={error ? errorId : undefined}>
+      <legend>{label}</legend>
+      <div className="month-range-inputs">
+        <label>
+          <span>开始月份</span>
+          <input
+            type="month"
+            value={startMonth}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+            onInput={(event) => {
+              const next = event.target.value;
+              setStartMonth(next);
+              const fieldset = event.currentTarget.closest("fieldset");
+              const end = fieldset?.querySelectorAll<HTMLInputElement>('input[type="month"]')[1]?.value ?? endMonth;
+              const isPresent = fieldset?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked ?? present;
+              commit(next, end, isPresent);
+            }}
+          />
+        </label>
+        <label>
+          <span>结束月份</span>
+          <input
+            type="month"
+            value={endMonth}
+            disabled={present}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+            onInput={(event) => {
+              const next = event.target.value;
+              setEndMonth(next);
+              const fieldset = event.currentTarget.closest("fieldset");
+              const start = fieldset?.querySelector<HTMLInputElement>('input[type="month"]')?.value ?? startMonth;
+              const isPresent = fieldset?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked ?? present;
+              commit(start, next, isPresent);
+            }}
+          />
+        </label>
+      </div>
+      <label className="period-present">
+        <input
+          type="checkbox"
+          checked={present}
+          onChange={(event) => {
+            const next = event.target.checked;
+            setPresent(next);
+            const fieldset = event.currentTarget.closest("fieldset");
+            const months = fieldset?.querySelectorAll<HTMLInputElement>('input[type="month"]');
+            commit(months?.[0]?.value ?? startMonth, months?.[1]?.value ?? endMonth, next);
+          }}
+        />
+        至今
+      </label>
+      {error && <small className="field-error" id={errorId}>{error}</small>}
+    </fieldset>
   );
 }
 

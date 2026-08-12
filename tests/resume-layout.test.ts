@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   decideSmartLayout,
   effectiveResumeDensity,
+  normalizeResumeHeadingFontSize,
   normalizeResumeFontSize,
+  RESUME_HEADING_FONT_SIZE_OPTIONS,
   RESUME_FONT_SIZE_OPTIONS,
 } from "../app/lib/resume-layout.ts";
 
@@ -13,6 +15,15 @@ test("关闭智能一页时共享预览始终使用 normal", () => {
   assert.equal(effectiveResumeDensity(false, "compact"), "normal");
   assert.equal(effectiveResumeDensity(false, "ultra"), "normal");
   assert.equal(effectiveResumeDensity(true, "relaxed"), "relaxed");
+});
+
+test("标题字号严格为 8/9/10/11，并兼容旧 10.5/12", () => {
+  assert.deepEqual(RESUME_HEADING_FONT_SIZE_OPTIONS, [8, 9, 10, 11]);
+  assert.equal(normalizeResumeHeadingFontSize(8), 8);
+  assert.equal(normalizeResumeHeadingFontSize(9), 9);
+  assert.equal(normalizeResumeHeadingFontSize(10.5), 10);
+  assert.equal(normalizeResumeHeadingFontSize(12), 11);
+  assert.equal(normalizeResumeHeadingFontSize("invalid"), 10);
 });
 
 test("正文字号选项严格为 5/6/7/8/9，历史 10/12 安全归一化为 9", () => {

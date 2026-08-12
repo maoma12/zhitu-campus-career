@@ -1087,6 +1087,14 @@ select:focus-visible {
   font-style: normal;
 }
 
+.activity-empty {
+  border-top: 1px solid #edf1ee;
+  padding: 20px 4px 8px;
+  color: #7a8880;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
 .next-panel {
   position: relative;
   overflow: hidden;
@@ -1716,6 +1724,90 @@ select:focus-visible {
   margin-top: 0;
 }
 
+.month-range-field {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.form-grid.two > .month-range-field {
+  grid-column: 1 / -1;
+}
+
+.month-range-field > legend,
+.month-range-field > span {
+  margin-bottom: 6px;
+  color: #516058;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.month-range-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.month-range-inputs label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.month-range-inputs label > span {
+  color: #738079;
+  font-size: 7px;
+}
+
+.month-range-inputs input[type="month"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.period-present {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  color: #526158;
+  font-size: 8px;
+}
+
+.period-present input {
+  width: 15px;
+  height: 15px;
+}
+
+.period-preserved {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid #d8e0da;
+  border-radius: 9px;
+  background: #f7f9f8;
+  padding: 7px 9px;
+}
+
+.period-preserved span {
+  overflow-wrap: anywhere;
+  color: #5e6d65;
+  font-size: 8px;
+}
+
+.period-preserved button {
+  flex: 0 0 auto;
+  border: 1px solid #cfdad3;
+  border-radius: 7px;
+  background: #fff;
+  padding: 6px 8px;
+  color: #176b4d;
+  font-size: 8px;
+  font-weight: 750;
+}
+
 .field > span {
   color: #516058;
   font-size: 8px;
@@ -2016,10 +2108,27 @@ select:focus-visible {
   font-size: 9px;
 }
 
+.preview-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.preview-zoom-controls > span {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .preview-toolbar .fit-button {
   width: auto;
   padding: 0 8px;
   font-size: 7px;
+}
+
+.preview-toolbar .fit-button.active {
+  border-color: #6ca98c;
+  background: #eaf5ee;
+  color: #176b4d;
 }
 
 .a4-badge {
@@ -2057,8 +2166,9 @@ select:focus-visible {
 
 .shared-preview-pages {
   display: grid;
-  width: min(100%, 610px);
-  gap: 18px;
+  width: var(--preview-width, 610px);
+  max-width: none;
+  gap: var(--preview-page-gap, 18px);
   margin: 0 auto;
 }
 
@@ -4096,6 +4206,22 @@ select:focus-visible {
   .card-meta {
     align-items: flex-start;
     gap: 8px;
+  }
+  .preview-toolbar {
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 7px 10px;
+  }
+  .preview-zoom-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  .preview-toolbar button {
+    min-width: 34px;
+    height: 34px;
+  }
+  .month-range-inputs {
+    grid-template-columns: 1fr;
   }
   .page-header {
     flex-direction: column;

@@ -1,6 +1,9 @@
 export const RESUME_FONT_SIZE_OPTIONS = [5, 6, 7, 8, 9] as const;
+export const RESUME_HEADING_FONT_SIZE_OPTIONS = [8, 9, 10, 11] as const;
 
 export type ResumeFontSize = (typeof RESUME_FONT_SIZE_OPTIONS)[number];
+export type ResumeHeadingFontSize =
+  (typeof RESUME_HEADING_FONT_SIZE_OPTIONS)[number];
 export type ResumeDensity = "relaxed" | "normal" | "compact" | "ultra";
 
 export const RELAXED_ENTER_MAX_FILL_RATIO = 0.72;
@@ -22,6 +25,15 @@ export function normalizeResumeFontSize(value: unknown): ResumeFontSize {
       Math.abs(option - value) < Math.abs(nearest - value) ? option : nearest,
     5,
   );
+}
+
+export function normalizeResumeHeadingFontSize(
+  value: unknown,
+): ResumeHeadingFontSize {
+  if (value === 8 || value === 9 || value === 10 || value === 11) return value;
+  if (value === 10.5) return 10;
+  if (value === 12) return 11;
+  return 10;
 }
 
 export type SmartLayoutDecisionInput = {
