@@ -9,6 +9,7 @@ import {
   splitResumeEntries,
   validateImportFile,
 } from "../app/lib/resume-import.ts";
+import { applyImportedResumeLayoutDefaults } from "../app/lib/resume-layout.ts";
 
 type Fixture = {
   fixtureLabel: string;
@@ -34,6 +35,15 @@ const fixture = JSON.parse(
     "utf8",
   ),
 ) as Fixture;
+
+test("TXT DOCX PDF and OCR share the 7pt/10pt import submission defaults", () => {
+  for (const format of ["txt", "docx", "pdf", "ocr-png", "ocr-jpg"]) {
+    assert.deepEqual(
+      applyImportedResumeLayoutDefaults({ format }),
+      { format, fontSize: 7, headingFontSize: 10 },
+    );
+  }
+});
 
 function fixtureText() {
   const sections: [string, keyof Fixture][] = [

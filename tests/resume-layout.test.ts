@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyImportedResumeLayoutDefaults,
   decideSmartLayout,
   effectiveResumeDensity,
   normalizeResumeHeadingFontSize,
@@ -9,6 +10,26 @@ import {
   RESUME_HEADING_FONT_SIZE_OPTIONS,
   RESUME_FONT_SIZE_OPTIONS,
 } from "../app/lib/resume-layout.ts";
+
+test("import submission uses 7pt body and 10pt headings without mutating its source", () => {
+  const source = { id: "TEST-FIXTURE", fontSize: 9 as const, headingFontSize: 11 as const };
+  const imported = applyImportedResumeLayoutDefaults(source);
+  assert.deepEqual(imported, {
+    id: "TEST-FIXTURE",
+    fontSize: 7,
+    headingFontSize: 10,
+  });
+  assert.deepEqual(source, {
+    id: "TEST-FIXTURE",
+    fontSize: 9,
+    headingFontSize: 11,
+  });
+});
+
+test("existing and manually selected 8pt/9pt values remain unchanged", () => {
+  assert.equal(normalizeResumeFontSize(8), 8);
+  assert.equal(normalizeResumeFontSize(9), 9);
+});
 
 test("关闭智能一页时共享预览始终使用 normal", () => {
   assert.equal(effectiveResumeDensity(false, "relaxed"), "normal");

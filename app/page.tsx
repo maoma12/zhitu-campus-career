@@ -57,6 +57,7 @@ import {
   type JobTarget,
 } from "./lib/job-targets";
 import {
+  applyImportedResumeLayoutDefaults,
   decideSmartLayout,
   effectiveResumeDensity,
   normalizeResumeFontSize,
@@ -1976,7 +1977,7 @@ export default function Home() {
 
   const confirmImport = () => {
     if (!parsedImport) return;
-    const imported: Resume = normalizeResume({
+    const imported: Resume = normalizeResume(applyImportedResumeLayoutDefaults({
       ...blankResume,
       id: `resume-${Date.now()}`,
       name: importFileName.replace(/\.(pdf|docx|txt|png|jpe?g)$/i, "") || "导入的简历",
@@ -2048,7 +2049,7 @@ export default function Home() {
       evaluation: parsedImport.evaluation,
       portfolio: parsedImport.portfolio,
       completion: 45,
-    });
+    }));
     setResumes((items) => [imported, ...items]);
     setShowImport(false);
     setParsedImport(null);

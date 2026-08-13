@@ -6,6 +6,20 @@ export type ResumeHeadingFontSize =
   (typeof RESUME_HEADING_FONT_SIZE_OPTIONS)[number];
 export type ResumeDensity = "relaxed" | "normal" | "compact" | "ultra";
 
+export const IMPORTED_RESUME_FONT_SIZE: ResumeFontSize = 7;
+export const IMPORTED_RESUME_HEADING_FONT_SIZE: ResumeHeadingFontSize = 10;
+
+export function applyImportedResumeLayoutDefaults<T extends object>(resume: T) {
+  return {
+    ...resume,
+    fontSize: IMPORTED_RESUME_FONT_SIZE,
+    headingFontSize: IMPORTED_RESUME_HEADING_FONT_SIZE,
+  } satisfies T & {
+    fontSize: ResumeFontSize;
+    headingFontSize: ResumeHeadingFontSize;
+  };
+}
+
 export const RELAXED_ENTER_MAX_FILL_RATIO = 0.72;
 
 export function effectiveResumeDensity(
