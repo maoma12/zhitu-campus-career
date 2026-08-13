@@ -2613,6 +2613,38 @@ select:focus-visible {
   padding: 22px;
 }
 
+.job-target-toolbar,
+.job-target-list article,
+.job-comparison header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.job-target-toolbar { margin-bottom: 9px; }
+.job-target-toolbar > div { display: flex; gap: 6px; }
+.job-target-toolbar strong { font-size: 9px; }
+.job-target-toolbar button,
+.job-delete { border: 1px solid #dbe5df; border-radius: 7px; background: #f7faf8; padding: 6px 8px; color: var(--green); font-size: 7px; }
+.job-target-list { display: grid; gap: 6px; margin-bottom: 15px; }
+.job-target-list article { border: 1px solid #e1e8e4; border-radius: 9px; padding: 6px; }
+.job-target-list article.active { border-color: #87b69f; background: #eff7f2; }
+.job-target-list article > button:first-child { max-width: 80px; overflow: hidden; border: 0; background: transparent; color: #345c49; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.job-target-list article > input { min-width: 0; height: 28px; font-size: 7px; }
+.job-target-list label { display: flex; align-items: center; gap: 3px; font-size: 6.5px; white-space: nowrap; }
+.job-target-list .job-delete { color: #a85245; }
+.job-target-empty { margin: 0 0 15px; border: 1px dashed #dce5df; border-radius: 8px; padding: 9px; color: #78867e; font-size: 7px; }
+.analysis-stale { margin: -7px 0 10px; border-radius: 7px; background: #fff1e5; padding: 7px; color: #a35b2f; font-size: 7px; }
+.job-comparison { grid-column: 1 / -1; border: 1px solid #dfe7e1; border-radius: 16px; background: #fff; padding: 15px; }
+.job-comparison header span { display: block; margin-top: 3px; color: #7b8981; font-size: 7px; }
+.job-comparison header em { color: #526a5e; font-size: 7px; font-style: normal; }
+.job-comparison > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin-top: 10px; }
+.job-comparison article { border: 1px solid #e2e8e4; border-radius: 10px; padding: 10px; }
+.job-comparison h3 { margin: 0 0 7px; font-size: 9px; }
+.job-comparison dl { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0; }
+.job-comparison dl div { display: flex; justify-content: space-between; background: #f4f7f5; padding: 5px; font-size: 6.5px; }
+.job-comparison p { margin: 6px 0 0; color: #718078; font-size: 6.5px; }
+
 .input-card-head {
   display: flex;
   align-items: center;
@@ -3731,6 +3763,10 @@ select:focus-visible {
   padding: 22px;
   box-shadow: 0 35px 100px rgba(12, 31, 21, 0.28);
 }
+.interview-list article.expanded { align-items: start; }
+.interview-details { margin-top: 8px; border-top: 1px solid #e8eeea; padding-top: 7px; }
+.interview-details p { margin-top: 4px; line-height: 1.55; }
+.interview-details .safety-note { color: #9b633b; }
 
 .modal.import-modal {
   display: grid;
@@ -4226,6 +4262,12 @@ select:focus-visible {
   .page-header {
     flex-direction: column;
   }
+  .job-target-list article { display: grid; grid-template-columns: 1fr auto; }
+  .job-target-list article > input { grid-column: 1 / -1; }
+  .job-comparison > div { grid-template-columns: 1fr; }
+  .job-comparison header { align-items: flex-start; flex-direction: column; }
+  .interview-list article { grid-template-columns: 29px 1fr; }
+  .interview-list article > button { grid-column: 2; justify-self: start; min-height: 34px; }
   .resume-grid,
   .dashboard-lower,
   .form-grid.two,

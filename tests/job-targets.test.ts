@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";import test from "node:test";
+import { JOB_TARGET_LIMIT,addJobTarget,deleteJobTarget,isJobAnalysisStale,normalizeJobTargets,renameJobTarget,type JobTarget } from "../app/lib/job-targets.ts";
+import { readFile } from "node:fs/promises";
+const item=(id:string):JobTarget=>({id,name:`TEST FIXTURE ${id}`,jdText:id,createdAt:"2026-01-01",updatedAt:"2026-01-01"});
+test("旧 workspace 缺少岗位卡时确定性为空",()=>assert.deepEqual(normalizeJobTargets(undefined),[]));
+test("A/B 岗位卡互不串用",()=>{const a=normalizeJobTargets([item("A")]);const b=normalizeJobTargets([item("B")]);assert.deepEqual(a.map(x=>x.id),["A"]);assert.deepEqual(b.map(x=>x.id),["B"])});
+test("新增上限、重命名、删除与比较选择清理",()=>{const full=Array.from({length:JOB_TARGET_LIMIT},(_,i)=>item(String(i)));assert.equal(addJobTarget(full,item("X")).added,false);assert.equal(renameJobTarget([item("A")],"A","  新名称  ")[0].name,"新名称");assert.deepEqual(deleteJobTarget([item("A"),item("B")],"A",["A","B"]),{items:[item("B")],selected:["B"]})});
+test("编辑已分析文本后结果过期",()=>{assert.equal(isJobAnalysisStale({...item("A"),analyzedText:"旧文本"}),true);assert.equal(isJobAnalysisStale({...item("A"),analyzedText:"A"}),false)});
+test("岗位卡进入账号 workspace 的 550ms 身份守卫保存链路",async()=>{const source=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");assert.match(source,/jobTargets,\s*\n\s*};/);assert.match(source,/}, 550\)/);assert.match(source,/isCurrentIdentity\(expectedIdentity, identityRef\.current\)/);assert.match(source,/setJobTargets\(clean\.jobTargets\)/)});
+test("快速粘贴、切换岗位或简历时分析代次和绑定目标受守卫",async()=>{const source=await readFile(new URL("../app/page.tsx",import.meta.url),"utf8");assert.match(source,/jdTextRef\.current = value/);assert.match(source,/const currentJDText = jdTextRef\.current/g);assert.match(source,/expectedGeneration !== jdAnalysisGenerationRef\.current/);assert.match(source,/expectedJobId !== activeJobIdRef\.current/);assert.match(source,/const selectJobTarget[\s\S]*?invalidateJDAnalysis\(\)/);assert.match(source,/setCurrentId=\{\(id\) => \{\s*invalidateJDAnalysis\(\)/);assert.match(source,/const removeJobTarget[\s\S]*?invalidateJDAnalysis\(\)/)});

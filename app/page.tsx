@@ -41,9 +41,21 @@ import {
   resolveAuthenticatedWorkspace,
 } from "./lib/workspace-security";
 import {
-  analyzeKeywordCoverage,
+  analyzeJD,
+  assessJDInput,
+  compareJobTargets,
   KeywordCoverageResult,
+  type InterviewQuestion,
 } from "./lib/jd-analysis";
+import {
+  JOB_TARGET_LIMIT,
+  addJobTarget,
+  deleteJobTarget,
+  isJobAnalysisStale,
+  normalizeJobTargets,
+  renameJobTarget,
+  type JobTarget,
+} from "./lib/job-targets";
 import {
   decideSmartLayout,
   effectiveResumeDensity,
@@ -180,6 +192,7 @@ type StoredWorkspace = {
   currentId: string;
   template: Template;
   histories: ResumeHistory;
+  jobTargets: JobTarget[];
 };
 
 type Suggestion = {
@@ -196,9 +209,7 @@ type Suggestion = {
   targetId?: string;
 };
 
-type JDAnalysisResult = KeywordCoverageResult & {
-  questions: [string, string, string][];
-};
+type JDAnalysisResult = KeywordCoverageResult & { questions: InterviewQuestion[] };
 
 const moduleMeta: Record<StandardModuleKey, { label: string; icon: string }> = {
   basic: { label: "基本信息", icon: "人" },
@@ -394,7 +405,7 @@ const initialSuggestions: Suggestion[] = [
   },
 ];
 
-const jdSample = `Java 后端开发实习生
+const jdSample = `【示例 JD｜TEST FIXTURE】Java 后端开发实习生
 
 岗位职责：
 1. 参与业务系统后端功能开发、接口设计与单元测试；
@@ -407,24 +418,6 @@ const jdSample = `Java 后端开发实习生
 3. 了解 Spring Boot、MySQL、Git；
 4. 掌握数据结构、TCP/IP 等计算机基础；
 5. 具备良好的沟通能力和学习能力。`;
-
-const jdKeywordRules = [
-  { label: "Java", aliases: ["java"], question: "请说明 Java 面向对象的核心特性，并结合项目举例。" },
-  { label: "Spring Boot", aliases: ["spring boot", "springboot"], question: "请介绍 Spring Boot 自动配置的基本原理。" },
-  { label: "MySQL", aliases: ["mysql"], question: "请说明常用索引类型以及索引失效的场景。" },
-  { label: "SQL", aliases: ["sql", "数据库"], question: "如果数据量增长，你会如何分析和优化一条慢查询？" },
-  { label: "Git", aliases: ["git"], question: "团队协作中你如何处理 Git 分支冲突？" },
-  { label: "数据结构", aliases: ["数据结构", "data structure"], question: "请比较数组、链表和哈希表的适用场景。" },
-  { label: "TCP/IP", aliases: ["tcp/ip", "tcp", "计算机网络"], question: "请说明 TCP 三次握手和四次挥手的过程。" },
-  { label: "Linux", aliases: ["linux"], question: "你常用哪些 Linux 命令排查进程或网络问题？" },
-  { label: "Redis", aliases: ["redis"], question: "请说明 Redis 常见数据结构及其适用场景。" },
-  { label: "Python", aliases: ["python"], question: "请介绍你用 Python 完成过的一个具体任务。" },
-  { label: "C/C++", aliases: ["c++", "c/c++"], question: "请说明 C++ 中继承与多态的实现方式。" },
-  { label: "React", aliases: ["react"], question: "请说明 React 状态更新与组件渲染之间的关系。" },
-  { label: "Vue", aliases: ["vue"], question: "请介绍 Vue 响应式系统的基本思路。" },
-  { label: "沟通协作", aliases: ["沟通", "协作", "团队合作"], question: "请举例说明你如何协调不同角色推进一项任务。" },
-  { label: "学习能力", aliases: ["学习能力", "快速学习"], question: "请举例说明你如何在短时间内掌握一项新技能。" },
-];
 
 function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
   const sections = [
@@ -472,25 +465,8 @@ function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
       text: `${resume.certificate} ${resume.evaluation} ${resume.portfolio}`,
     },
   ];
-  const coverage = analyzeKeywordCoverage(jd, jdKeywordRules, sections);
-  const selected = jdKeywordRules.filter((rule) =>
-    coverage.keywords.includes(rule.label),
-  );
-  const questions: [string, string, string][] = selected.slice(0, 7).map((rule) => [
-    coverage.missing.includes(rule.label) ? "待补充能力" : "岗位重点",
-    rule.question,
-    `来源：JD 关键词「${rule.label}」`,
-  ]);
-  if (questions.length < 5) {
-    questions.push(
-      ["项目深挖", "请选择一个最能代表你的项目，说明背景、个人任务、行动和结果。", "来源：简历项目经历"],
-      ["行为面试", "请举例说明你遇到困难后如何定位问题并推动解决。", "来源：通用校招面试"],
-    );
-  }
-  return {
-    ...coverage,
-    questions: questions.slice(0, 8),
-  };
+  const result = analyzeJD(jd, sections);
+  return { ...result, questions: result.questions ?? [] };
 }
 
 function buildRuleSuggestions(
@@ -620,6 +596,7 @@ function createCleanWorkspace(): StoredWorkspace {
     currentId: blankResume.id,
     template: "classic",
     histories: {},
+    jobTargets: [],
   };
 }
 
@@ -1420,6 +1397,9 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [versionName, setVersionName] = useState("");
   const [histories, setHistories] = useState<ResumeHistory>({});
+  const [jobTargets, setJobTargets] = useState<JobTarget[]>([]);
+  const [activeJobId, setActiveJobId] = useState("");
+  const [compareJobIds, setCompareJobIds] = useState<string[]>([]);
   const [showImport, setShowImport] = useState(false);
   const [parsedImport, setParsedImport] = useState<ParsedResumeText | null>(null);
   const [importFileName, setImportFileName] = useState("");
@@ -1447,7 +1427,19 @@ export default function Home() {
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const identityRef = useRef<IdentityEpoch>({ generation: 0, userId: null });
+  const jdTextRef = useRef(jdSample);
   const jdAnalysisTimerRef = useRef<number | null>(null);
+  const jdAnalysisGenerationRef = useRef(0);
+  const activeJobIdRef = useRef("");
+
+  const invalidateJDAnalysis = () => {
+    jdAnalysisGenerationRef.current += 1;
+    if (jdAnalysisTimerRef.current !== null) {
+      window.clearTimeout(jdAnalysisTimerRef.current);
+      jdAnalysisTimerRef.current = null;
+    }
+    setAnalyzing(false);
+  };
 
   const current =
     resumes.find((resume) => resume.id === currentId) ?? resumes[0];
@@ -1493,6 +1485,13 @@ export default function Home() {
         );
         setHistories(migrated);
       }
+      const normalizedJobs = normalizeJobTargets(parsed.jobTargets);
+      setJobTargets(normalizedJobs);
+      setActiveJobId(normalizedJobs[0]?.id ?? "");
+      activeJobIdRef.current = normalizedJobs[0]?.id ?? "";
+      setJdText(normalizedJobs[0]?.jdText ?? "");
+      jdTextRef.current = normalizedJobs[0]?.jdText ?? "";
+      setCompareJobIds([]);
   };
 
   const resetSensitiveState = () => {
@@ -1510,22 +1509,24 @@ export default function Home() {
     setShowHistory(false);
     setVersionName("");
     setHistories(clean.histories);
+    setJobTargets(clean.jobTargets);
+    setActiveJobId("");
+    activeJobIdRef.current = "";
+    setCompareJobIds([]);
     setShowImport(false);
     setParsedImport(null);
     setImportFileName("");
     setImportStatus("");
     setImportProgress(0);
     setJdText("");
+    jdTextRef.current = "";
     setAnalysisReady(false);
     setAnalyzing(false);
     setAnalysisTab("match");
     setJdAnalysis(null);
     setSuggestions([]);
     setSelectedSuggestion(1);
-    if (jdAnalysisTimerRef.current !== null) {
-      window.clearTimeout(jdAnalysisTimerRef.current);
-      jdAnalysisTimerRef.current = null;
-    }
+    invalidateJDAnalysis();
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -1613,6 +1614,8 @@ export default function Home() {
       cancelled = true;
       loadController.abort();
     };
+  // Initialization intentionally runs once; identity transitions are handled by the auth subscription.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1626,6 +1629,7 @@ export default function Home() {
         currentId,
         template,
         histories,
+        jobTargets,
       };
       if (session) {
         if (expectedIdentity.userId !== session.user.id) return;
@@ -1665,7 +1669,7 @@ export default function Home() {
       window.clearTimeout(timer);
       saveController.abort();
     };
-  }, [resumes, currentId, template, histories, ready, session, persistence]);
+  }, [resumes, currentId, template, histories, jobTargets, ready, session, persistence]);
 
   useEffect(() => {
     if (!session) return;
@@ -2143,17 +2147,21 @@ export default function Home() {
   };
 
   const analyzeJD = () => {
-    if (jdText.trim().length < 80) {
-      setToast("请补充完整的岗位职责和任职要求");
+    const currentJDText = jdTextRef.current;
+    const inputStatus = assessJDInput(currentJDText);
+    if (!inputStatus.canAnalyze) {
+      setToast(inputStatus.detail);
       return;
     }
     setAnalyzing(true);
     setAnalysisReady(false);
     const expectedIdentity = identityRef.current;
+    const expectedGeneration = ++jdAnalysisGenerationRef.current;
+    const expectedJobId = activeJobIdRef.current;
     jdAnalysisTimerRef.current = window.setTimeout(() => {
       jdAnalysisTimerRef.current = null;
-      if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
-      const result = analyzeWithRules(jdText, current);
+      if (!isCurrentIdentity(expectedIdentity, identityRef.current) || expectedGeneration !== jdAnalysisGenerationRef.current || expectedJobId !== activeJobIdRef.current) return;
+      const result = analyzeWithRules(currentJDText, current);
       setJdAnalysis(result);
       const nextSuggestions = buildRuleSuggestions(current, result);
       setSuggestions(nextSuggestions);
@@ -2161,10 +2169,75 @@ export default function Home() {
       setAnalyzing(false);
       setAnalysisReady(true);
       setAnalysisTab("match");
+      if (expectedJobId) {
+        setJobTargets((items) => items.map((item) =>
+          item.id === expectedJobId
+            ? { ...item, jdText: currentJDText, analyzedText: currentJDText, updatedAt: new Date().toISOString() }
+            : item,
+        ));
+      }
       if (!result.keywords.length) {
         setToast("未识别到常见岗位关键词，请补充更完整的任职要求");
       }
     }, 350);
+  };
+
+  const saveJobTarget = () => {
+    const currentJDText = jdTextRef.current;
+    if (!currentJDText.trim()) { setToast("请先粘贴岗位 JD"); return; }
+    const now = new Date().toISOString();
+    const parsedTitle = analyzeWithRules(currentJDText, current).structure?.title;
+    const target: JobTarget = {
+      id: createUniqueId("job"),
+      name: parsedTitle || `岗位 ${jobTargets.length + 1}`,
+      jdText: currentJDText,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (activeJobId) {
+      setJobTargets((items) => items.map((item) => item.id === activeJobId ? { ...item, jdText: currentJDText, updatedAt: now } : item));
+      setToast("当前岗位已保存");
+      return;
+    }
+    const result = addJobTarget(jobTargets, target);
+    if (!result.added) { setToast(`最多保存 ${JOB_TARGET_LIMIT} 个岗位`); return; }
+    setJobTargets(result.items); setActiveJobId(target.id); activeJobIdRef.current = target.id; setToast("岗位已保存");
+  };
+
+  const selectJobTarget = (id: string) => {
+    const target = jobTargets.find((item) => item.id === id);
+    if (!target) return;
+    invalidateJDAnalysis();
+    setActiveJobId(id); activeJobIdRef.current = id; setJdText(target.jdText); jdTextRef.current = target.jdText; setJdAnalysis(null);
+    setAnalysisReady(false); setSuggestions([]); setAnalysisTab("match");
+  };
+
+  const changeJDText = (value: string) => {
+    jdTextRef.current = value;
+    invalidateJDAnalysis();
+    setJdText(value);
+    if (activeJobId) {
+      setJobTargets((items) => items.map((item) =>
+        item.id === activeJobId ? { ...item, jdText: value, updatedAt: new Date().toISOString() } : item,
+      ));
+      setAnalysisReady(false);
+      setJdAnalysis(null);
+      setSuggestions([]);
+    }
+  };
+
+  const removeJobTarget = (id: string) => {
+    const target = jobTargets.find((item) => item.id === id);
+    if (!target || !window.confirm(`确认删除岗位「${target.name}」？只会删除这张岗位卡，不影响简历或历史版本。`)) return;
+    invalidateJDAnalysis();
+    const result = deleteJobTarget(jobTargets, id, compareJobIds);
+    setJobTargets(result.items); setCompareJobIds(result.selected);
+    if (activeJobId === id) {
+      invalidateJDAnalysis();
+      const next = result.items[0]; setActiveJobId(next?.id ?? ""); activeJobIdRef.current = next?.id ?? ""; setJdText(next?.jdText ?? ""); jdTextRef.current = next?.jdText ?? "";
+      setJdAnalysis(null); setAnalysisReady(false); setSuggestions([]);
+    }
+    setToast("岗位卡已删除");
   };
 
   const updateSuggestion = (
@@ -2480,9 +2553,29 @@ export default function Home() {
           <JDPage
             resumes={resumes}
             currentId={currentId}
-            setCurrentId={setCurrentId}
+            setCurrentId={(id) => {
+              invalidateJDAnalysis();
+              setCurrentId(id); setAnalysisReady(false); setJdAnalysis(null); setSuggestions([]);
+            }}
             jdText={jdText}
-            setJdText={setJdText}
+            setJdText={changeJDText}
+            jobTargets={jobTargets}
+            activeJobId={activeJobId}
+            selectJobTarget={selectJobTarget}
+            saveJobTarget={saveJobTarget}
+            newJobTarget={() => {
+              invalidateJDAnalysis();
+              setActiveJobId(""); activeJobIdRef.current = ""; setJdText(""); jdTextRef.current = "";
+              setAnalysisReady(false); setJdAnalysis(null); setSuggestions([]);
+            }}
+            renameJobTarget={(id, name) => setJobTargets((items) => renameJobTarget(items, id, name))}
+            deleteJobTarget={removeJobTarget}
+            compareJobIds={compareJobIds}
+            setCompareJobIds={setCompareJobIds}
+            comparison={compareJobTargets(compareJobIds.flatMap((id) => {
+              const job = jobTargets.find((item) => item.id === id);
+              return job ? [{ id: job.id, name: job.name, analysis: analyzeWithRules(job.jdText, current) }] : [];
+            }))}
             analyzing={analyzing}
             analysisReady={analysisReady}
             analysis={jdAnalysis}
@@ -4984,6 +5077,16 @@ function JDPage({
   setCurrentId,
   jdText,
   setJdText,
+  jobTargets,
+  activeJobId,
+  selectJobTarget,
+  saveJobTarget,
+  newJobTarget,
+  renameJobTarget: renameTarget,
+  deleteJobTarget: deleteTarget,
+  compareJobIds,
+  setCompareJobIds,
+  comparison,
   analyzing,
   analysisReady,
   analysis,
@@ -4999,6 +5102,16 @@ function JDPage({
   setCurrentId: (id: string) => void;
   jdText: string;
   setJdText: (value: string) => void;
+  jobTargets: JobTarget[];
+  activeJobId: string;
+  selectJobTarget: (id: string) => void;
+  saveJobTarget: () => void;
+  newJobTarget: () => void;
+  renameJobTarget: (id: string, name: string) => void;
+  deleteJobTarget: (id: string) => void;
+  compareJobIds: string[];
+  setCompareJobIds: (ids: string[]) => void;
+  comparison: ReturnType<typeof compareJobTargets>;
   analyzing: boolean;
   analysisReady: boolean;
   analysis: JDAnalysisResult | null;
@@ -5018,6 +5131,9 @@ function JDPage({
     coverageLabel: "未识别" as const,
     questions: [],
   };
+  const inputStatus = assessJDInput(jdText);
+  const activeJob = jobTargets.find((item) => item.id === activeJobId);
+  const stale = activeJob ? isJobAnalysisStale(activeJob) : false;
   return (
     <div className="page jd-page">
       <header className="page-header">
@@ -5035,6 +5151,22 @@ function JDPage({
 
       <div className={analysisReady ? "jd-layout has-result" : "jd-layout"}>
         <section className="jd-input-card">
+          <div className="job-target-toolbar">
+            <strong>岗位卡 <span>{jobTargets.length}/{JOB_TARGET_LIMIT}</span></strong>
+            <div><button type="button" onClick={newJobTarget}>＋ 新岗位</button><button type="button" onClick={saveJobTarget}>{activeJob ? "保存当前岗位" : "保存为岗位卡"}</button></div>
+          </div>
+          {jobTargets.length ? (
+            <div className="job-target-list">
+              {jobTargets.map((job) => (
+                <article className={job.id === activeJobId ? "active" : ""} key={job.id}>
+                  <button type="button" onClick={() => selectJobTarget(job.id)}>{job.name}</button>
+                  <input aria-label={`重命名岗位 ${job.name}`} value={job.name} onChange={(event) => renameTarget(job.id, event.target.value)} />
+                  <label><input type="checkbox" checked={compareJobIds.includes(job.id)} disabled={!compareJobIds.includes(job.id) && compareJobIds.length >= 3} onChange={(event) => setCompareJobIds(event.target.checked ? [...compareJobIds, job.id] : compareJobIds.filter((id) => id !== job.id))} />比较</label>
+                  <button type="button" className="job-delete" aria-label={`删除岗位 ${job.name}`} onClick={() => deleteTarget(job.id)}>删除</button>
+                </article>
+              ))}
+            </div>
+          ) : <p className="job-target-empty">暂无已保存岗位；粘贴真实 JD 后可保存为当前账号的岗位卡。</p>}
           <div className="input-card-head">
             <div>
               <span className="step-number">1</span>
@@ -5073,9 +5205,10 @@ function JDPage({
             onChange={(event) => setJdText(event.target.value)}
           />
           <div className="textarea-meta">
-            <span>{jdText.length} 字 · 内容完整</span>
-            <button onClick={() => setJdText(jdSample)}>填入示例 JD</button>
+            <span>{jdText.length} 字 · {inputStatus.label}；{inputStatus.detail}</span>
+            {!activeJob && <button onClick={() => setJdText(jdSample)}>填入示例 JD（TEST FIXTURE）</button>}
           </div>
+          {stale && <p className="analysis-stale">岗位文字已修改，现有分析已过期，请重新分析。</p>}
           <button className="analyze-button" onClick={analyzeJD} disabled={analyzing}>
             {analyzing ? (
               <>
@@ -5087,6 +5220,13 @@ function JDPage({
           </button>
           <p className="analysis-safety">不连接任何 AI 服务，不上传简历或 JD；仅统计预设关键词的文字覆盖，本地规则不代表企业筛选结果。</p>
         </section>
+
+        {comparison.items.length >= 2 && (
+          <section className="job-comparison" aria-label="岗位横向比较">
+            <header><div><strong>岗位横向比较</strong><span>最多 3 个，仅比较文字证据，不替你决定投递顺序。</span></div><em>共同要求：{comparison.common.join("、") || "暂无"}</em></header>
+            <div>{comparison.items.map((item) => <article key={item.id}><h3>{item.name}</h3><dl><div><dt>识别要求</dt><dd>{item.recognized}</dd></div><div><dt>经历证据</dt><dd>{item.experience}</dd></div><div><dt>仅陈述</dt><dd>{item.listed}</dd></div><div><dt>待确认</dt><dd>{item.gap}</dd></div></dl><p>类别：{item.category}</p><p>独有要求：{item.unique.join("、") || "暂无"}</p><p>强度：必须 {item.intensity.must} / 加分 {item.intensity.preferred} / 提及 {item.intensity.mentioned}</p></article>)}</div>
+          </section>
+        )}
 
         {!analysisReady && !analyzing && (
           <aside className="analysis-placeholder">
@@ -5233,31 +5373,19 @@ function MatchReport({
 }
 
 function KeywordReport({ analysis }: { analysis: JDAnalysisResult }) {
+  const requirements = analysis.requirements ?? [];
+  const kinds = (["hard", "tool", "domain", "soft"] as const).map((kind) => ({
+    kind,
+    label: { hard: "专业能力", tool: "工具", domain: "业务领域", soft: "软性能力" }[kind],
+    items: requirements.filter((item) => item.kind === kind),
+  })).filter((group) => group.items.length);
   return (
     <div className="result-content keyword-content">
-      <section>
-        <h3>硬性要求</h3>
-        <div className="keyword-cloud">
-          {(analysis.keywords.length ? analysis.keywords : ["暂未识别到常见技术关键词"]).map(
-            (keyword) => (
-              <span className={analysis.matched.includes(keyword) ? "matched" : ""} key={keyword}>
-                {analysis.matched.includes(keyword) ? "✓ " : ""}{keyword}
-              </span>
-            ),
-          )}
-        </div>
-      </section>
-      <section>
-        <h3>软性能力</h3>
-        <div className="keyword-cloud soft">
-          {["沟通协作", "学习能力", "问题定位", "需求理解"].map((keyword) => (
-            <span key={keyword}>{keyword}</span>
-          ))}
-        </div>
-      </section>
+      {kinds.length ? kinds.map((group) => <section key={group.kind}><h3>{group.label}</h3><div className={`keyword-cloud ${group.kind === "soft" ? "soft" : ""}`}>{group.items.map((item) => <span className={item.level !== "gap" ? "matched" : ""} key={item.id}>{item.level !== "gap" ? "✓ " : ""}{item.label} · {item.intensity === "must" ? "必须" : item.intensity === "preferred" ? "加分" : "提及"}</span>)}</div></section>) : <section><h3>未识别到预设能力</h3><p>请查看 JD 原文；规则不会为了填满报告而虚构要求。</p></section>}
+      {analysis.structure && <section className="jd-structure"><h3>{analysis.structure.title || "未可靠识别岗位标题"}</h3><p>岗位类别：{analysis.structure.category}</p><p>职责 {analysis.structure.responsibilities.length} 条 · 任职要求 {analysis.structure.requirements.length} 条 · 未分段 {analysis.structure.unsegmented.length} 条</p></section>}
       <section className="invalid-copy">
-        <span>低筛选价值描述</span>
-        <p>“具备良好的沟通能力和学习能力”属于通用描述，需要用经历证据支撑。</p>
+        <span>判断边界</span>
+        <p>软能力只有在当前 JD 真实出现时展示；泛词不等于强经历证据。</p>
       </section>
     </div>
   );
@@ -5289,15 +5417,16 @@ function AdviceReport({
 function InterviewReport({
   questions,
 }: {
-  questions: [string, string, string][];
+  questions: InterviewQuestion[];
 }) {
+  const [expanded, setExpanded] = useState<string[]>([]);
   return (
     <div className="result-content interview-list">
-      {questions.map(([tag, question, source], index) => (
-        <article key={question}>
+      {questions.map((item, index) => (
+        <article className={expanded.includes(item.id) ? "expanded" : ""} key={item.id}>
           <span>{index + 1}</span>
-          <div><em>{tag}</em><h3>{question}</h3><p>{source}</p></div>
-          <button>准备要点 ＋</button>
+          <div><em>{item.tag}</em><h3>{item.question}</h3><p>来源要求：{item.requirement}</p>{expanded.includes(item.id) && <div className="interview-details"><p><strong>为什么问：</strong>{item.why}</p><p><strong>回答结构：</strong>{item.answerStructure}</p><p><strong>可引用模块：</strong>{item.evidenceSources.join("、") || "暂无"}</p><p className="safety-note">{item.safetyNote}</p></div>}</div>
+          <button aria-expanded={expanded.includes(item.id)} onClick={() => setExpanded((items) => items.includes(item.id) ? items.filter((id) => id !== item.id) : [...items, item.id])}>{expanded.includes(item.id) ? "收起要点 −" : "准备要点 ＋"}</button>
         </article>
       ))}
     </div>
