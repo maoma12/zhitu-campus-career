@@ -36,6 +36,15 @@ test("正文字号选项严格为 5/6/7/8/9，历史 10/12 安全归一化为 9"
   assert.equal(normalizeResumeFontSize(undefined), 9);
 });
 
+test("五档正文字号与四档标题字号保持独立", () => {
+  for (const body of RESUME_FONT_SIZE_OPTIONS) {
+    assert.equal(normalizeResumeFontSize(body), body);
+  }
+  for (const heading of RESUME_HEADING_FONT_SIZE_OPTIONS) {
+    assert.equal(normalizeResumeHeadingFontSize(heading), heading);
+  }
+});
+
 test("短内容从 normal 进入 relaxed 并稳定在一页", () => {
   const relaxed = decideSmartLayout({
     density: "normal",

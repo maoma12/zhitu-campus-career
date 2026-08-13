@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  deriveWorkspaceActivities,
   hasMeaningfulModuleContent,
   isPreviewModuleVisible,
   visiblePreviewModuleKeys,
@@ -24,56 +23,6 @@ const baseResume = {
   ],
   hiddenModules: [],
 };
-
-test("空 workspace 不伪造最近动态", () => {
-  assert.deepEqual(
-    deriveWorkspaceActivities([{ id: "TEST-A", name: "TEST FIXTURE A" }], {}),
-    [],
-  );
-});
-
-test("最近动态只派生当前 workspace 的真实 histories", () => {
-  const activities = deriveWorkspaceActivities(
-    [{ id: "TEST-A", name: "TEST FIXTURE A" }],
-    {
-      "TEST-A": [{ id: "A-1", label: "TEST A 版本", createdAt: "2026-08-11 10:00" }],
-      "TEST-B": [{ id: "B-1", label: "TEST B 版本", createdAt: "2026-08-12 10:00" }],
-    },
-  );
-  assert.deepEqual(activities.map((item) => item.id), ["A-1"]);
-  assert.equal(activities[0].resumeName, "TEST FIXTURE A");
-});
-
-test("A/B workspace 动态不会共享", () => {
-  const histories = {
-    "TEST-A": [{ id: "A-1", label: "TEST A", createdAt: "2026-08-11" }],
-    "TEST-B": [{ id: "B-1", label: "TEST B", createdAt: "2026-08-12" }],
-  };
-  assert.deepEqual(
-    deriveWorkspaceActivities([{ id: "TEST-A", name: "A" }], histories).map((item) => item.id),
-    ["A-1"],
-  );
-  assert.deepEqual(
-    deriveWorkspaceActivities([{ id: "TEST-B", name: "B" }], histories).map((item) => item.id),
-    ["B-1"],
-  );
-});
-
-test("删除快照或简历后对应动态立即消失", () => {
-  const resumes = [{ id: "TEST-A", name: "A" }, { id: "TEST-B", name: "B" }];
-  const histories = {
-    "TEST-A": [{ id: "A-1", label: "A", createdAt: "2026-08-11" }],
-    "TEST-B": [{ id: "B-1", label: "B", createdAt: "2026-08-12" }],
-  };
-  assert.deepEqual(
-    deriveWorkspaceActivities(resumes, { ...histories, "TEST-A": [] }).map((item) => item.id),
-    ["B-1"],
-  );
-  assert.deepEqual(
-    deriveWorkspaceActivities([resumes[0]], histories).map((item) => item.id),
-    ["A-1"],
-  );
-});
 
 test("标准模块、custom 与空壳条目的内容判断统一", () => {
   assert.equal(hasMeaningfulModuleContent(baseResume, "basic"), true);

@@ -1032,67 +1032,15 @@ select:focus-visible {
   font-size: 8px;
 }
 
-.dashboard-lower {
-  display: grid;
-  grid-template-columns: 1.6fr 0.75fr;
-  gap: 16px;
+.dashboard-next {
   margin-top: 24px;
 }
 
-.activity-panel,
 .next-panel {
   border: 1px solid #e0e7e2;
   border-radius: 17px;
   background: #fff;
   padding: 20px;
-}
-
-.activity-row {
-  display: grid;
-  grid-template-columns: 14px 1fr auto;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 0;
-  border-top: 1px solid #edf1ee;
-}
-
-.activity-dot {
-  width: 7px;
-  height: 7px;
-  border: 2px solid #8fc2aa;
-  border-radius: 50%;
-}
-
-.activity-row div {
-  display: flex;
-  flex-direction: column;
-}
-
-.activity-row strong {
-  font-size: 10px;
-}
-
-.activity-row small {
-  margin-top: 3px;
-  color: #87938d;
-  font-size: 8px;
-}
-
-.activity-row em {
-  border-radius: 6px;
-  background: #f0f5f1;
-  color: #67776f;
-  padding: 4px 6px;
-  font-size: 8px;
-  font-style: normal;
-}
-
-.activity-empty {
-  border-top: 1px solid #edf1ee;
-  padding: 20px 4px 8px;
-  color: #7a8880;
-  font-size: 10px;
-  line-height: 1.7;
 }
 
 .next-panel {
@@ -4177,7 +4125,6 @@ select:focus-visible {
   .resume-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .dashboard-lower,
   .jd-layout,
   .jd-layout.has-result {
     grid-template-columns: 1fr;
@@ -4269,7 +4216,6 @@ select:focus-visible {
   .interview-list article { grid-template-columns: 29px 1fr; }
   .interview-list article > button { grid-column: 2; justify-self: start; min-height: 34px; }
   .resume-grid,
-  .dashboard-lower,
   .form-grid.two,
   .evidence-grid,
   .breakdown-grid {

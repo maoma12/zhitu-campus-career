@@ -68,7 +68,6 @@ import {
   ResumeHeadingFontSize,
 } from "./lib/resume-layout";
 import {
-  deriveWorkspaceActivities,
   isMeaningfulResumeEntry,
   isPreviewModuleVisible,
   visiblePreviewModuleKeys,
@@ -85,6 +84,7 @@ import {
   applyManualPreviewZoom,
   calculateFitWidthZoom,
 } from "./lib/preview-zoom";
+import { pairAlignedCloneNodes } from "./lib/preview-style-mapping";
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
@@ -2497,7 +2497,6 @@ export default function Home() {
         {view === "dashboard" && (
           <Dashboard
             resumes={resumes}
-            histories={histories}
             openResume={openResume}
             duplicateResume={duplicateResume}
             deleteResume={deleteResume}
@@ -2979,7 +2978,6 @@ function AuthPage({
 
 function Dashboard({
   resumes,
-  histories,
   openResume,
   duplicateResume,
   deleteResume,
@@ -2989,7 +2987,6 @@ function Dashboard({
   goJD,
 }: {
   resumes: Resume[];
-  histories: ResumeHistory;
   openResume: (id: string) => void;
   duplicateResume: (resume: Resume) => void;
   deleteResume: (resume: Resume) => void;
@@ -3002,8 +2999,6 @@ function Dashboard({
     resumes
       .map((resume) => resume.basic.name.trim())
       .find(Boolean) || "求职同学";
-  const activities = deriveWorkspaceActivities(resumes, histories);
-
   return (
     <div className="page dashboard-page">
       <header className="page-header">
@@ -3121,32 +3116,7 @@ function Dashboard({
         </button>
       </div>
 
-      <div className="dashboard-lower">
-        <section className="activity-panel">
-          <div className="section-heading compact">
-            <div>
-              <h2>最近动态</h2>
-              <span>你的简历变化都可追溯</span>
-            </div>
-          </div>
-          {activities.length ? (
-            activities.map((activity) => (
-              <div className="activity-row" key={`${activity.resumeId}-${activity.id}`}>
-                <span className="activity-dot" />
-                <div>
-                  <strong>{activity.label}</strong>
-                  <small>{activity.resumeName} · {activity.createdAt}</small>
-                </div>
-                <em>版本</em>
-              </div>
-            ))
-          ) : (
-            <div className="activity-empty">
-              暂无历史动态；保存版本后会显示在这里。
-            </div>
-          )}
-        </section>
-
+      <div className="dashboard-next">
         <aside className="next-panel">
           <span className="panel-kicker">推荐下一步</span>
           <h3>用目标岗位检验这份简历</h3>
@@ -3616,7 +3586,7 @@ function Editor({
       context.fillRect(0, 0, canvas.width, headerHeight);
       y = px(smart ? 25 : 30);
     }
-    setFont(px(23), 500);
+    setFont(px(23), 800);
     context.fillStyle = template === "azure" ? "#ffffff" : "#161916";
     context.fillText(resume.basic.name || "你的姓名", contentX, y);
     y += px(34);
@@ -3828,7 +3798,6 @@ function Editor({
     const pagePixelHeight = Math.round(pageHeight * renderScale);
 
     const clone = sourcePaper.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll(".paper-page-break").forEach((marker) => marker.remove());
     clone.style.width = `${paperWidth}px`;
     clone.style.minWidth = `${paperWidth}px`;
     clone.style.maxWidth = `${paperWidth}px`;
@@ -3853,9 +3822,7 @@ function Editor({
       clone,
       ...Array.from(clone.querySelectorAll<HTMLElement>("*")),
     ];
-    sourceTextNodes.forEach((sourceNode, index) => {
-      const clonedNode = clonedTextNodes[index];
-      if (!clonedNode) return;
+    pairAlignedCloneNodes(sourceTextNodes, clonedTextNodes).forEach(([sourceNode, clonedNode]) => {
       const computed = window.getComputedStyle(sourceNode);
       clonedNode.style.fontFamily = computed.fontFamily;
       clonedNode.style.fontSize = computed.fontSize;
@@ -3865,6 +3832,10 @@ function Editor({
       clonedNode.style.lineHeight = computed.lineHeight;
       clonedNode.style.wordSpacing = computed.wordSpacing;
     });
+    // The clone must stay structurally identical while computed styles are
+    // frozen. Removing page markers earlier shifts every following node and
+    // applies body styles to headings in multi-page resumes.
+    clone.querySelectorAll(".paper-page-break").forEach((marker) => marker.remove());
 
     const stylesheetText = Array.from(document.styleSheets)
       .map((stylesheet) => {
