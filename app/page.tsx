@@ -422,34 +422,26 @@ const jdSample = `【示例 JD｜TEST FIXTURE】Java 后端开发实习生
 
 function analyzeWithRules(jd: string, resume: Resume): JDAnalysisResult {
   const sections = [
-    {
-      label: "实习经历",
+    ...resume.experiences.map((item, index) => ({
+      label: `实习经历 ${index + 1}`,
       level: "experience" as const,
-      text: resume.experiences
-        .map((item) => `${item.company} ${item.role} ${item.description}`)
-        .join("\n"),
-    },
-    {
-      label: "项目经历",
+      text: `${item.company} ${item.role} ${item.description}`,
+    })),
+    ...resume.projects.map((item, index) => ({
+      label: `项目经历 ${index + 1}`,
       level: "experience" as const,
-      text: resume.projects
-        .map((item) => `${item.name} ${item.role} ${item.stack} ${item.description}`)
-        .join("\n"),
-    },
-    {
-      label: "教育经历",
+      text: `${item.name} ${item.role} ${item.stack} ${item.description}`,
+    })),
+    ...resume.educations.map((item, index) => ({
+      label: `教育经历 ${index + 1}`,
       level: "experience" as const,
-      text: resume.educations
-        .map((item) => `${item.school} ${item.major} ${item.degree} ${item.detail}`)
-        .join("\n"),
-    },
-    {
-      label: "校园经历",
+      text: `${item.school} ${item.major} ${item.degree} ${item.detail}`,
+    })),
+    ...resume.campusExperiences.map((item, index) => ({
+      label: `校园经历 ${index + 1}`,
       level: "experience" as const,
-      text: resume.campusExperiences
-        .map((item) => `${item.department} ${item.description}`)
-        .join("\n"),
-    },
+      text: `${item.department} ${item.description}`,
+    })),
     {
       label: "技能特长",
       level: "listed" as const,
@@ -5180,8 +5172,8 @@ function JDPage({
             <span>{jdText.length} 字 · {inputStatus.label}；{inputStatus.detail}</span>
             {!activeJob && <button onClick={() => setJdText(jdSample)}>填入示例 JD（TEST FIXTURE）</button>}
           </div>
-          {stale && <p className="analysis-stale">岗位文字已修改，现有分析已过期，请重新分析。</p>}
-          <button className="analyze-button" onClick={analyzeJD} disabled={analyzing}>
+          {stale && <p className="analysis-stale" aria-live="polite">岗位文字已修改，现有分析已过期，请重新分析。</p>}
+          <button className="analyze-button" onClick={analyzeJD} disabled={analyzing} aria-busy={analyzing}>
             {analyzing ? (
               <>
                 <span className="spinner" /> 正在识别岗位重点…
@@ -5196,7 +5188,7 @@ function JDPage({
         {comparison.items.length >= 2 && (
           <section className="job-comparison" aria-label="岗位横向比较">
             <header><div><strong>岗位横向比较</strong><span>最多 3 个，仅比较文字证据，不替你决定投递顺序。</span></div><em>共同要求：{comparison.common.join("、") || "暂无"}</em></header>
-            <div>{comparison.items.map((item) => <article key={item.id}><h3>{item.name}</h3><dl><div><dt>识别要求</dt><dd>{item.recognized}</dd></div><div><dt>经历证据</dt><dd>{item.experience}</dd></div><div><dt>仅陈述</dt><dd>{item.listed}</dd></div><div><dt>待确认</dt><dd>{item.gap}</dd></div></dl><p>类别：{item.category}</p><p>独有要求：{item.unique.join("、") || "暂无"}</p><p>强度：必须 {item.intensity.must} / 加分 {item.intensity.preferred} / 提及 {item.intensity.mentioned}</p></article>)}</div>
+            <div>{comparison.items.map((item) => <article key={item.id}><h3>{item.name}</h3><dl><div><dt>识别要求</dt><dd>{item.recognized}</dd></div><div><dt>经历证据</dt><dd>{item.experience}</dd></div><div><dt>仅陈述</dt><dd>{item.listed}</dd></div><div><dt>待确认</dt><dd>{item.gap}</dd></div></dl><p>类别：{jobCategoryLabel(item.category)}</p><p>独有要求：{item.unique.join("、") || "暂无"}</p><p>强度：必须 {item.intensity.must} / 加分 {item.intensity.preferred} / 提及 {item.intensity.mentioned}</p></article>)}</div>
           </section>
         )}
 
@@ -5220,7 +5212,7 @@ function JDPage({
         )}
 
         {analyzing && (
-          <aside className="analysis-loading">
+          <aside className="analysis-loading" role="status" aria-live="polite">
             <span className="big-spinner" />
             <h2>正在交叉比对简历与 JD</h2>
             <div className="loading-steps">
@@ -5236,20 +5228,20 @@ function JDPage({
             <div className="result-hero">
               <div className="score-ring">
                 <strong>{result.matched.length}/{result.keywords.length}</strong>
-                <span>关键词覆盖</span>
+                <span>岗位要求文字证据</span>
               </div>
               <div className="score-summary">
                 <span className="good-badge">
                   {result.coverageLabel}
                 </span>
-                <h2>已比对 {result.keywords.length} 个岗位关键词</h2>
+                <h2>已比对 {result.keywords.length} 项本地规则识别要求</h2>
                 <p>
                   {result.matched.length
                     ? `${result.matched.join("、")} 已在简历中体现。`
                     : "暂未在简历中找到明确匹配关键词。"}
                   {result.missing.length ? ` ${result.missing.join("、")} 尚未体现。` : ""}
                 </p>
-                <small>只表示预设词典的文字命中，不评估真实能力或录用概率。</small>
+                <small>仅表示已识别岗位要求中的简历文字证据；不评估真实能力、企业筛选或录用概率。</small>
               </div>
               <div className="score-delta">
                 <strong>{result.missing.length}</strong>
@@ -5299,7 +5291,7 @@ function MatchReport({
     <div className="result-content">
       <div className="breakdown-grid">
         {[
-          ["关键词覆盖", `${analysis.matched.length}/${analysis.keywords.length}`, "预设词典中已有文字命中的项目"],
+          ["岗位要求文字证据", `${analysis.matched.length}/${analysis.keywords.length}`, "本地规则识别要求中已有简历文字证据的项目"],
           ["经历证据", String(analysis.evidence.filter((item) => item.level === "experience").length), "在教育、实习、项目或校园经历中命中"],
           ["陈述证据", String(analysis.evidence.filter((item) => item.level === "listed").length), "仅在技能、简介或其他陈述中命中"],
           ["待确认缺口", String(analysis.missing.length), "JD 出现、简历文字暂未体现；不等于不具备"],
@@ -5344,6 +5336,17 @@ function MatchReport({
   );
 }
 
+function jobCategoryLabel(category: string) {
+  if (category === "unknown" || category === "未分类") return "证据不足，暂不分类";
+  if (category === "ambiguous") return "可能涉及多个岗位类别";
+  return category;
+}
+
+function requirementSectionLabel(section: string, inferred: boolean) {
+  if (inferred) return "未分段文字（规则推断）";
+  return { responsibilities: "岗位职责", requirements: "任职要求", preferred: "加分/优先", unsegmented: "未分段文字" }[section] ?? section;
+}
+
 function KeywordReport({ analysis }: { analysis: JDAnalysisResult }) {
   const requirements = analysis.requirements ?? [];
   const kinds = (["hard", "tool", "domain", "soft"] as const).map((kind) => ({
@@ -5353,8 +5356,10 @@ function KeywordReport({ analysis }: { analysis: JDAnalysisResult }) {
   })).filter((group) => group.items.length);
   return (
     <div className="result-content keyword-content">
-      {kinds.length ? kinds.map((group) => <section key={group.kind}><h3>{group.label}</h3><div className={`keyword-cloud ${group.kind === "soft" ? "soft" : ""}`}>{group.items.map((item) => <span className={item.level !== "gap" ? "matched" : ""} key={item.id}>{item.level !== "gap" ? "✓ " : ""}{item.label} · {item.intensity === "must" ? "必须" : item.intensity === "preferred" ? "加分" : "提及"}</span>)}</div></section>) : <section><h3>未识别到预设能力</h3><p>请查看 JD 原文；规则不会为了填满报告而虚构要求。</p></section>}
-      {analysis.structure && <section className="jd-structure"><h3>{analysis.structure.title || "未可靠识别岗位标题"}</h3><p>岗位类别：{analysis.structure.category}</p><p>职责 {analysis.structure.responsibilities.length} 条 · 任职要求 {analysis.structure.requirements.length} 条 · 未分段 {analysis.structure.unsegmented.length} 条</p></section>}
+      {kinds.length ? kinds.map((group) => <section key={group.kind}><h3>{group.label}</h3><div className="requirement-list">{group.items.map((item) => <details className={item.level !== "gap" ? "requirement-detail matched" : "requirement-detail"} key={item.id}><summary>{item.level !== "gap" ? "✓ " : ""}{item.label} · {item.intensity === "must" ? "必须" : item.intensity === "preferred" ? "加分" : "提及"}</summary><dl><div><dt>JD 原句</dt><dd>{item.jdSnippet}</dd></div><div><dt>所在分区</dt><dd>{requirementSectionLabel(item.section, item.inferred)}</dd></div><div><dt>强度依据</dt><dd>{item.strengthSource}</dd></div><div><dt>简历证据</dt><dd>{item.sources.length ? `${item.level === "experience" ? "经历证据" : "仅陈述"}：${item.sources.join("、")}` : "当前简历文字未找到同一条目内的对应证据；不等于本人不具备。"}</dd></div></dl></details>)}</div></section>) : <section><h3>未识别到预设能力</h3><p>请查看 JD 原文；规则不会为了填满报告而虚构要求。</p></section>}
+      {!!analysis.excludedRequirements?.length && <section><h3>排除或可选项</h3><div className="requirement-list">{analysis.excludedRequirements.map((item) => <details className="requirement-detail excluded" key={`${item.id}-${item.jdSnippet}`}><summary>{item.label} · {item.disposition === "excluded" ? "明确不要求" : "可选"}</summary><dl><div><dt>JD 原句</dt><dd>{item.jdSnippet}</dd></div><div><dt>判断依据</dt><dd>{item.reason}</dd></div><div><dt>处理方式</dt><dd>不计入硬性要求，也不作为简历缺口。</dd></div></dl></details>)}</div></section>}
+      {!!analysis.constraints?.length && <section><h3>描述性约束</h3><div className="constraint-list">{analysis.constraints.map((item) => <article key={`${item.id}-${item.jdSnippet}`}><strong>{item.label}</strong><p>{item.jdSnippet}</p><small>{requirementSectionLabel(item.section, item.inferred)} · {item.intensity === "preferred" ? "优先/加分" : item.intensity === "must" ? "明确要求" : "文字提及"}；仅摘录，不判断简历是否满足。</small></article>)}</div></section>}
+      {analysis.structure && <section className="jd-structure"><h3>{analysis.structure.title || "未可靠识别岗位标题"}</h3><p>岗位类别：{jobCategoryLabel(analysis.structure.category)}</p><p>分类依据：{analysis.structure.categoryEvidence.join("、") || "标题与正文证据不足"}</p><p>职责 {analysis.structure.responsibilities.length} 条 · 任职要求 {analysis.structure.requirements.length} 条 · 加分项 {analysis.structure.preferred.length} 条 · 未分段 {analysis.structure.unsegmented.length} 条</p></section>}
       <section className="invalid-copy">
         <span>判断边界</span>
         <p>软能力只有在当前 JD 真实出现时展示；泛词不等于强经历证据。</p>

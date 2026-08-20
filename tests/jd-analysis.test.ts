@@ -20,6 +20,12 @@ const fixtures:[string,string][]=[
   ["行政/项目协调","项目协调\n任职要求：\n负责会议组织与流程跟进"],
 ];
 test("常见校招岗位分类均可解释",()=>fixtures.forEach(([expected,jd])=>assert.equal(parseJDStructure(`TEST FIXTURE ${jd}`).category,expected)));
+
+test("通用报表语境不会被误识别为财务能力",()=>{
+  const analysis=analyzeJD("TEST FIXTURE 数据分析实习生\n岗位职责：负责虚构业务报表。\n任职要求：必须掌握 SQL",[]);
+  assert.equal(analysis.structure.category,"数据分析/数据开发");
+  assert.equal(analysis.requirements.some((item)=>item.id==="finance"),false);
+});
 test("能力概念包含 hard/soft/domain/tool 与中英文 aliases",()=>{
   assert.deepEqual(new Set(JD_CAPABILITY_RULES.map(x=>x.kind)),new Set(["hard","soft","domain","tool"]));
   const result=analyzeJD("TEST FIXTURE 数据岗\n任职要求：必须掌握 SQL；Python preferred；了解数据分析",resume);
@@ -55,4 +61,55 @@ test("多岗位比较只给事实维度、共同项和独有项",()=>{
   const compared=compareJobTargets([{id:"A",name:"A",analysis:a},{id:"B",name:"B",analysis:b}]);
   assert.deepEqual(compared.common,["Git"]);assert.deepEqual(compared.items[0].unique,["React"]);assert.deepEqual(compared.items[1].unique,["Java"]);
   assert.equal("score" in compared,false);
+});
+
+test("否定与可选语义优先于强度词，且不制造缺口",()=>{
+  const result=analyzeJD("TEST FIXTURE 后端\n任职要求：无需掌握 Java；Redis 非必须；MySQL optional；必须掌握 SQL",[]);
+  assert.deepEqual(result.requirements?.map(x=>x.id),["sql"]);
+  assert.deepEqual(result.excludedRequirements?.map(x=>[x.id,x.disposition]),[["java","excluded"],["redis","excluded"],["mysql","optional"]]);
+  assert.deepEqual(result.missing,["SQL"]);
+});
+
+test("英文 Requirements 章节名不把全部条目误判为 must",()=>{
+  const result=analyzeJD("TEST FIXTURE Data Intern\nRequirements\nSQL preferred\nPython knowledge\nJava required",[]);
+  assert.deepEqual(Object.fromEntries((result.requirements??[]).map(x=>[x.id,x.intensity])),{sql:"preferred",python:"mentioned",java:"must"});
+});
+
+test("职责、任职要求、加分项和未分段推断保留来源",()=>{
+  const result=analyzeJD("TEST FIXTURE 前端\n工作内容：必须使用 React 完成页面。任职资格：掌握 TypeScript。加分项：熟悉 Vue",[]);
+  const items=Object.fromEntries((result.requirements??[]).map(x=>[x.id,x]));
+  assert.equal(items.react.section,"responsibilities");assert.equal(items.react.intensity,"mentioned");
+  assert.equal(items.javascript.section,"requirements");assert.equal(items.javascript.intensity,"must");
+  assert.equal(items.vue.section,"preferred");assert.equal(items.vue.intensity,"preferred");
+  const inferred=analyzeJD("TEST FIXTURE 未知岗位\n熟悉 Redis",[]).requirements?.[0];
+  assert.equal(inferred?.inferred,true);
+});
+
+test("短词使用词界且通用工具不足以强行分类",()=>{
+  assert.equal(analyzeJD("TEST FIXTURE English copy\nWe go to market and train people",[]).keywords.includes("Go"),false);
+  assert.deepEqual(analyzeJD("TEST FIXTURE Systems\n任职要求：C、C++、R、AI、BD、HR、PRD",[]).keywords,["C/C++","R","机器学习/算法","需求分析","商务/销售","人力资源"]);
+  assert.equal(parseJDStructure("TEST FIXTURE 实习生\n任职要求：Git、Excel、Python").category,"unknown");
+  assert.equal(parseJDStructure("TEST FIXTURE 工程师\n任职要求：React、Java").category,"ambiguous");
+});
+
+test("非技能约束只做描述性提取，不声称简历满足",()=>{
+  const result=analyzeJD("TEST FIXTURE 产品实习生\n任职要求：本科及以上学历；2027 年毕业；每周实习 4 天；英语六级；需提供作品集；可接受出差",[]);
+  assert.deepEqual(new Set(result.constraints?.map(x=>x.id)),new Set(["education","graduation","internship","language","portfolio","travel"]));
+  assert.equal(result.requirements?.length,0);
+});
+
+test("软能力证据不能跨条目拼接",()=>{
+  const sections:EvidenceSection[]=[
+    {label:"项目 1",level:"experience",text:"具备沟通能力。"},
+    {label:"项目 2",level:"experience",text:"负责协调成员并推动任务完成。"},
+  ];
+  const result=analyzeJD("TEST FIXTURE 运营\n任职要求：具备沟通能力",sections);
+  assert.equal(result.requirements?.find(x=>x.id==="communication")?.level,"gap");
+});
+
+test("面试题优先 must gap，通用题明确标注 supplemental",()=>{
+  const result=analyzeJD("TEST FIXTURE 后端\n任职要求：必须掌握 Redis；MySQL preferred",[]);
+  assert.equal(result.questions?.[0].requirement,"Redis");
+  assert.equal(result.questions?.[0].tag.includes("必须 · 待确认"),true);
+  assert.equal(result.questions?.filter(x=>x.supplemental).every(x=>x.tag==="通用补充"),true);
 });

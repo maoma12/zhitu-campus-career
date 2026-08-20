@@ -2592,6 +2592,11 @@ select:focus-visible {
 .job-comparison dl { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0; }
 .job-comparison dl div { display: flex; justify-content: space-between; background: #f4f7f5; padding: 5px; font-size: 6.5px; }
 .job-comparison p { margin: 6px 0 0; color: #718078; font-size: 6.5px; }
+.job-comparison h3,
+.job-comparison p,
+.job-comparison header em,
+.job-target-list article > input,
+.jd-structure p { overflow-wrap: anywhere; }
 
 .input-card-head {
   display: flex;
@@ -3094,6 +3099,34 @@ select:focus-visible {
   margin: 0 0 9px;
   font-size: 10px;
 }
+
+.requirement-list,
+.constraint-list {
+  display: grid;
+  gap: 7px;
+}
+
+.requirement-detail,
+.constraint-list article {
+  min-width: 0;
+  border: 1px solid #e0e6e2;
+  border-radius: 9px;
+  background: #f7f9f7;
+  color: #52625a;
+  overflow-wrap: anywhere;
+}
+
+.requirement-detail.matched { border-color: #bcd9ca; background: #eef7f1; }
+.requirement-detail.excluded { border-color: #d8dde4; background: #f5f6f8; }
+.requirement-detail summary { cursor: pointer; padding: 9px 11px; font-size: 7.5px; font-weight: 800; }
+.requirement-detail dl { display: grid; gap: 6px; margin: 0; border-top: 1px solid #e2e7e4; padding: 9px 11px; }
+.requirement-detail dl div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; }
+.requirement-detail dt { color: #718078; font-size: 6.5px; font-weight: 700; }
+.requirement-detail dd { margin: 0; font-size: 7px; line-height: 1.6; }
+.constraint-list article { padding: 10px 11px; }
+.constraint-list strong { font-size: 7.5px; }
+.constraint-list p { margin: 5px 0; font-size: 7px; line-height: 1.55; }
+.constraint-list small { color: #718078; font-size: 6.5px; line-height: 1.5; }
 
 .keyword-cloud {
   display: flex;
