@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  loadPdfJsModule,
+  type PdfTextItem,
+} from "./pdfjs-loader.ts";
+
 export type ParsedResumeText = {
   rawText: string;
   name: string;
@@ -15,24 +20,6 @@ export type ParsedResumeText = {
   certificate: string;
   evaluation: string;
   portfolio: string;
-};
-
-type PdfTextItem = {
-  str?: string;
-  hasEOL?: boolean;
-  transform?: number[];
-  width?: number;
-};
-type PdfModule = {
-  GlobalWorkerOptions: { workerSrc: string };
-  getDocument(input: { data: ArrayBuffer }): {
-    promise: Promise<{
-      numPages: number;
-      getPage(page: number): Promise<{
-        getTextContent(): Promise<{ items: PdfTextItem[] }>;
-      }>;
-    }>;
-  };
 };
 
 export function splitResumeEntries(text: string) {
@@ -105,10 +92,7 @@ function normalizeText(value: string) {
 }
 
 async function readPdf(file: File) {
-  const moduleUrl = "/vendor/pdfjs/pdf.min.mjs";
-  const pdfjs = (await import(
-    /* @vite-ignore */ moduleUrl
-  )) as unknown as PdfModule;
+  const pdfjs = await loadPdfJsModule();
   pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
   const document = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   const pages: string[] = [];

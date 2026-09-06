@@ -257,6 +257,7 @@ const constraintRules:{id:string;label:string;pattern:RegExp}[]=[
   {id:"experience",label:"经验/年限要求",pattern:/(\d+\s*年.*经验|experience)/i},{id:"internship",label:"实习时长/到岗要求",pattern:/(实习.*(?:天|月)|每周.*天|到岗)/i},
   {id:"graduation",label:"毕业年份",pattern:/(20\d{2}\s*年?毕业)/i},{id:"language",label:"语言要求",pattern:/(英语|六级|四级|cet-?[46]|雅思|托福)/i},
   {id:"certificate",label:"证书要求",pattern:/(证书|会计证|资格证)/i},{id:"portfolio",label:"作品集要求",pattern:/(作品集|portfolio)/i},{id:"travel",label:"出差要求",pattern:/(出差|travel)/i},
+  {id:"location",label:"地点要求",pattern:/(工作地点|办公地点|base\s*(?:于|in)?|坐标|驻地|到场办公)/i},
 ];
 function constraintsFrom(structure:JDStructure):JDConstraint[]{
   const pools:[string[],JDSection][]=[[structure.requirements,"requirements"],[structure.preferred,"preferred"],[structure.unsegmented,"unsegmented"]];const result:JDConstraint[]=[];

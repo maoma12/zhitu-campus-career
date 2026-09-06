@@ -29,6 +29,7 @@ import {
   ParsedResumeText,
   splitResumeEntries,
 } from "./lib/resume-import";
+import { toResumeImportUserMessage } from "./lib/pdfjs-loader.ts";
 import {
   ANONYMOUS_WORKSPACE_KEY,
   IdentityEpoch,
@@ -86,6 +87,16 @@ import {
   calculateFitWidthZoom,
 } from "./lib/preview-zoom";
 import { pairAlignedCloneNodes } from "./lib/preview-style-mapping";
+import { AiPhase0Panel } from "./ai-phase0-panel";
+import { projectResumeFactPacks, resumeFactsFingerprint } from "./lib/ai-fact-guard.ts";
+import {
+  buildPriorityMatchItems,
+  assessConstraint,
+  filterSuggestionsByReview,
+  updateMatchReview,
+  type MatchReviewDecision,
+  type MatchReviewState,
+} from "./lib/match-workflow.ts";
 
 type View = "dashboard" | "editor" | "jd" | "optimize";
 type Template = "classic" | "azure" | "sidebar";
@@ -208,6 +219,8 @@ type Suggestion = {
   safe: boolean;
   applyTo?: "skills" | "summary" | "experience" | "project";
   targetId?: string;
+  requirementId?: string;
+  factIds?: string[];
 };
 
 type JDAnalysisResult = KeywordCoverageResult & { questions: InterviewQuestion[] };
@@ -569,7 +582,15 @@ function buildRuleSuggestions(
     safe: false,
   });
 
-  return suggestions;
+  const requirements = analysis.requirements ?? [];
+  const factPacks = projectResumeFactPacks(resume);
+  return suggestions.map((suggestion) => {
+    const requirement = requirements.find((item) => item.label === suggestion.keyword)
+      ?? requirements.find((item) => suggestion.keyword.includes(item.label))
+      ?? (suggestion.module === "缺失项" ? requirements.find((item) => item.level === "gap") : undefined);
+    const sourceModules = new Set(requirement?.sources.map((source) => source.startsWith("实习") ? "experience" : source.startsWith("项目") ? "project" : source.startsWith("教育") ? "education" : source.startsWith("校园") ? "campus" : source.startsWith("技能") ? "skills" : source.startsWith("证书") ? "certificate" : "") ?? []);
+    return requirement ? { ...suggestion, requirementId: requirement.id, factIds: factPacks.filter((pack) => sourceModules.has(pack.module)).map((pack) => pack.factId) } : suggestion;
+  });
 }
 
 function storageTime() {
@@ -1406,6 +1427,15 @@ export default function Home() {
   const [suggestions, setSuggestions] =
     useState<Suggestion[]>(initialSuggestions);
   const [selectedSuggestion, setSelectedSuggestion] = useState(1);
+  const [matchReviews, setMatchReviews] = useState<MatchReviewState>({});
+  const [analysisBinding, setAnalysisBinding] = useState<{
+    identityGeneration: number;
+    resumeId: string;
+    jobTargetId: string;
+    factsFingerprint: string;
+  } | null>(null);
+  const [analysisNotice, setAnalysisNotice] = useState("");
+  const [returnToMatching, setReturnToMatching] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authEmail, setAuthEmail] = useState("");
@@ -1432,10 +1462,13 @@ export default function Home() {
       jdAnalysisTimerRef.current = null;
     }
     setAnalyzing(false);
+    setMatchReviews({});
+    setAnalysisBinding(null);
   };
 
   const current =
     resumes.find((resume) => resume.id === currentId) ?? resumes[0];
+  const currentFactsFingerprint = resumeFactsFingerprint(current);
 
   const applyWorkspace = (parsed: unknown) => {
       if (!isRecord(parsed)) return;
@@ -1519,6 +1552,10 @@ export default function Home() {
     setJdAnalysis(null);
     setSuggestions([]);
     setSelectedSuggestion(1);
+    setMatchReviews({});
+    setAnalysisBinding(null);
+    setAnalysisNotice("");
+    setReturnToMatching(false);
     invalidateJDAnalysis();
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -1719,6 +1756,13 @@ export default function Home() {
   }, [toast]);
 
   const updateCurrent = (patch: Partial<Resume>) => {
+    if (analysisReady || analyzing || analysisBinding) {
+      invalidateJDAnalysis();
+      setAnalysisReady(false);
+      setJdAnalysis(null);
+      setSuggestions([]);
+      setAnalysisNotice(analysisReady || analysisBinding ? "简历已变化，请重新分析。" : "");
+    }
     setResumes((items) =>
       items.map((item) =>
         item.id === currentId
@@ -1962,7 +2006,7 @@ export default function Home() {
     } catch (error) {
       if (!isCurrentIdentity(expectedIdentity, identityRef.current)) return;
       setImportStatus(
-        error instanceof Error ? error.message : "文件解析失败，请换一种格式重试",
+        toResumeImportUserMessage(error),
       );
     }
   };
@@ -2151,6 +2195,8 @@ export default function Home() {
     const expectedIdentity = identityRef.current;
     const expectedGeneration = ++jdAnalysisGenerationRef.current;
     const expectedJobId = activeJobIdRef.current;
+    const expectedResumeId = currentId;
+    const expectedFactsFingerprint = currentFactsFingerprint;
     jdAnalysisTimerRef.current = window.setTimeout(() => {
       jdAnalysisTimerRef.current = null;
       if (!isCurrentIdentity(expectedIdentity, identityRef.current) || expectedGeneration !== jdAnalysisGenerationRef.current || expectedJobId !== activeJobIdRef.current) return;
@@ -2162,6 +2208,9 @@ export default function Home() {
       setAnalyzing(false);
       setAnalysisReady(true);
       setAnalysisTab("match");
+      setMatchReviews({});
+      setAnalysisBinding({ identityGeneration: expectedIdentity.generation, resumeId: expectedResumeId, jobTargetId: expectedJobId, factsFingerprint: expectedFactsFingerprint });
+      setAnalysisNotice("");
       if (expectedJobId) {
         setJobTargets((items) => items.map((item) =>
           item.id === expectedJobId
@@ -2393,6 +2442,18 @@ export default function Home() {
     setToast(`已删除历史版本 ${snapshot.label}`);
   };
 
+  const visibleSuggestions = filterSuggestionsByReview(suggestions, matchReviews);
+  const reviewMatchRequirement = (requirementId: string, decision: MatchReviewDecision | null) => {
+    setMatchReviews((reviews) => updateMatchReview(reviews, requirementId, decision));
+    setAnalysisNotice(decision === "inaccurate" ? "已标记为待复核；相关自动建议已从本次会话排除。" : decision === "confirmed_gap" ? "已确认当前缺口；本次会话将弱化重复提示。" : "已清除核实标记。");
+  };
+  const editFromMatch = (module: StandardModuleKey | null) => {
+    setActiveModule(module ?? "experience");
+    setReturnToMatching(true);
+    setView("editor");
+    setToast(module ? `请只补充你确认真实存在的${moduleMeta[module].label}事实` : "请选择最相关模块，只补充真实事实");
+  };
+
   const navItems: { key: View; label: string; icon: string }[] = [
     { key: "dashboard", label: "简历中心", icon: "简" },
     { key: "editor", label: "简历编辑", icon: "编" },
@@ -2527,6 +2588,11 @@ export default function Home() {
             moveEntry={moveEntry}
             goDashboard={() => setView("dashboard")}
             goJD={() => setView("jd")}
+            returnToMatching={returnToMatching}
+            backToMatching={() => {
+              setReturnToMatching(false);
+              setView("jd");
+            }}
             setShowVersion={(value) => {
               setVersionName(
                 view === "optimize"
@@ -2571,18 +2637,23 @@ export default function Home() {
             analyzing={analyzing}
             analysisReady={analysisReady}
             analysis={jdAnalysis}
-            suggestionCount={suggestions.length}
-            suggestions={suggestions}
+            suggestionCount={visibleSuggestions.length}
+            suggestions={visibleSuggestions}
             analyzeJD={analyzeJD}
             analysisTab={analysisTab}
             setAnalysisTab={setAnalysisTab}
             goOptimize={() => setView("optimize")}
+            identityGeneration={persistence?.identity.generation ?? 0}
+            matchReviews={matchReviews}
+            reviewRequirement={reviewMatchRequirement}
+            editRequirement={editFromMatch}
+            analysisNotice={analysisNotice}
           />
         )}
 
         {view === "optimize" && (
           <OptimizePage
-            suggestions={suggestions}
+            suggestions={visibleSuggestions}
             target={current.basic.target || current.target || "目标岗位"}
             selected={selectedSuggestion}
             setSelected={setSelectedSuggestion}
@@ -2645,7 +2716,11 @@ export default function Home() {
           className="import-modal"
           onClose={() => setShowImport(false)}
         >
-          <div className="import-modal-status">
+          <div
+            className="import-modal-status"
+            role={!parsedImport && importStatus && !importStatus.startsWith("正在") ? "alert" : "status"}
+            aria-live="polite"
+          >
             <div className="parse-summary">
               <span className="success-icon">{parsedImport ? "✓" : "…"}</span>
               <div>
@@ -2664,6 +2739,25 @@ export default function Home() {
             className="import-modal-scroll"
             tabIndex={0}
             aria-label="导入字段校对内容"
+            onKeyDown={(event) => {
+              // WCAG 2.2 keyboard flow: the review region remains operable even
+              // when a browser does not apply native paging to overflow panels.
+              const panel = event.currentTarget;
+              const page = Math.max(panel.clientHeight * 0.9, 1);
+              if (event.key === "PageDown") {
+                event.preventDefault();
+                panel.scrollBy({ top: page });
+              } else if (event.key === "PageUp") {
+                event.preventDefault();
+                panel.scrollBy({ top: -page });
+              } else if (event.key === "Home") {
+                event.preventDefault();
+                panel.scrollTo({ top: 0 });
+              } else if (event.key === "End") {
+                event.preventDefault();
+                panel.scrollTo({ top: panel.scrollHeight });
+              }
+            }}
           >
             {parsedImport && (
               <>
@@ -3150,6 +3244,8 @@ function Editor({
   moveEntry,
   goDashboard,
   goJD,
+  returnToMatching,
+  backToMatching,
   setShowVersion,
   historyCount,
   showHistory,
@@ -3195,6 +3291,8 @@ function Editor({
   ) => void;
   goDashboard: () => void;
   goJD: () => void;
+  returnToMatching: boolean;
+  backToMatching: () => void;
   setShowVersion: (value: boolean) => void;
   historyCount: number;
   showHistory: () => void;
@@ -4088,6 +4186,7 @@ function Editor({
             <span><i /> {saveStatus}</span>
           </div>
         </div>
+        {returnToMatching && <button type="button" className="back-to-match" onClick={backToMatching}>← 返回匹配报告</button>}
         <div className="editor-actions">
           <button
             className={smartOnePage ? "one-page-toggle active" : "one-page-toggle"}
@@ -5060,6 +5159,11 @@ function JDPage({
   analysisTab,
   setAnalysisTab,
   goOptimize,
+  identityGeneration,
+  matchReviews,
+  reviewRequirement,
+  editRequirement,
+  analysisNotice,
 }: {
   resumes: Resume[];
   currentId: string;
@@ -5085,6 +5189,11 @@ function JDPage({
   analysisTab: string;
   setAnalysisTab: (value: string) => void;
   goOptimize: () => void;
+  identityGeneration: number;
+  matchReviews: MatchReviewState;
+  reviewRequirement: (requirementId: string, decision: MatchReviewDecision | null) => void;
+  editRequirement: (module: StandardModuleKey | null) => void;
+  analysisNotice: string;
 }) {
   const result = analysis ?? {
     keywords: [],
@@ -5097,6 +5206,7 @@ function JDPage({
   };
   const inputStatus = assessJDInput(jdText);
   const activeJob = jobTargets.find((item) => item.id === activeJobId);
+  const activeResume = resumes.find((item) => item.id === currentId) ?? resumes[0];
   const stale = activeJob ? isJobAnalysisStale(activeJob) : false;
   return (
     <div className="page jd-page">
@@ -5173,6 +5283,7 @@ function JDPage({
             {!activeJob && <button onClick={() => setJdText(jdSample)}>填入示例 JD（TEST FIXTURE）</button>}
           </div>
           {stale && <p className="analysis-stale" aria-live="polite">岗位文字已修改，现有分析已过期，请重新分析。</p>}
+          {analysisNotice && <p className="analysis-stale" aria-live="polite">{analysisNotice}</p>}
           <button className="analyze-button" onClick={analyzeJD} disabled={analyzing} aria-busy={analyzing}>
             {analyzing ? (
               <>
@@ -5184,6 +5295,15 @@ function JDPage({
           </button>
           <p className="analysis-safety">不连接任何 AI 服务，不上传简历或 JD；仅统计预设关键词的文字覆盖，本地规则不代表企业筛选结果。</p>
         </section>
+
+        {activeResume && <AiPhase0Panel
+          key={`${identityGeneration}:${currentId}:${activeJobId}:${jdText}:${resumeFactsFingerprint(activeResume)}`}
+          jdText={jdText}
+          resume={activeResume}
+          resumeId={currentId}
+          jobTargetId={activeJobId || null}
+          identityGeneration={identityGeneration}
+        />}
 
         {comparison.items.length >= 2 && (
           <section className="job-comparison" aria-label="岗位横向比较">
@@ -5225,30 +5345,6 @@ function JDPage({
 
         {analysisReady && (
           <section className="analysis-result">
-            <div className="result-hero">
-              <div className="score-ring">
-                <strong>{result.matched.length}/{result.keywords.length}</strong>
-                <span>岗位要求文字证据</span>
-              </div>
-              <div className="score-summary">
-                <span className="good-badge">
-                  {result.coverageLabel}
-                </span>
-                <h2>已比对 {result.keywords.length} 项本地规则识别要求</h2>
-                <p>
-                  {result.matched.length
-                    ? `${result.matched.join("、")} 已在简历中体现。`
-                    : "暂未在简历中找到明确匹配关键词。"}
-                  {result.missing.length ? ` ${result.missing.join("、")} 尚未体现。` : ""}
-                </p>
-                <small>仅表示已识别岗位要求中的简历文字证据；不评估真实能力、企业筛选或录用概率。</small>
-              </div>
-              <div className="score-delta">
-                <strong>{result.missing.length}</strong>
-                <span>待确认缺失项</span>
-              </div>
-            </div>
-
             <div className="result-tabs">
               {[
                 ["match", "匹配报告"],
@@ -5267,7 +5363,7 @@ function JDPage({
               ))}
             </div>
 
-            {analysisTab === "match" && <MatchReport analysis={result} suggestionCount={suggestionCount} goOptimize={goOptimize} />}
+            {analysisTab === "match" && activeResume && <MatchReport analysis={result} resume={activeResume} reviews={matchReviews} reviewRequirement={reviewRequirement} editRequirement={editRequirement} suggestionCount={suggestionCount} goOptimize={goOptimize} />}
             {analysisTab === "keywords" && <KeywordReport analysis={result} />}
             {analysisTab === "advice" && <AdviceReport suggestions={suggestions} goOptimize={goOptimize} />}
             {analysisTab === "interview" && <InterviewReport questions={result.questions} />}
@@ -5280,15 +5376,48 @@ function JDPage({
 
 function MatchReport({
   analysis,
+  resume,
+  reviews,
+  reviewRequirement,
+  editRequirement,
   suggestionCount,
   goOptimize,
 }: {
   analysis: JDAnalysisResult;
+  resume: Resume;
+  reviews: MatchReviewState;
+  reviewRequirement: (requirementId: string, decision: MatchReviewDecision | null) => void;
+  editRequirement: (module: StandardModuleKey | null) => void;
   suggestionCount: number;
   goOptimize: () => void;
 }) {
+  const packs = projectResumeFactPacks(resume);
+  const priorityItems = buildPriorityMatchItems(analysis.requirements ?? [], analysis.constraints ?? [], packs, reviews, 5);
+  const constraints = (analysis.constraints ?? []).map((item) => assessConstraint(item, packs));
+  const intensityLabel = { must: "必须", preferred: "加分", mentioned: "普通提及" } as const;
+  const evidenceLabel: Record<string, string> = { experience: "经历证据", listed: "仅陈述", gap: "无文字证据", insufficient: "信息不足需确认", satisfied: "明确满足", not_satisfied: "明确不满足", not_applicable: "不适用" };
   return (
     <div className="result-content">
+      <section className="priority-match" aria-labelledby="priority-match-title">
+        <header><div><p className="eyebrow">先处理这些</p><h3 id="priority-match-title">重点核实事项</h3></div><span>最多 5 条 · 仅依据文字证据</span></header>
+        <p className="priority-match-note">无文字证据不等于没有能力；只有确认真实存在的经历才应写入简历。</p>
+        {priorityItems.length ? <ol>{priorityItems.map((item) => {
+          const review = item.kind === "requirement" ? reviews[item.id] : undefined;
+          return <li key={item.id} className={review ? `reviewed ${review}` : ""}>
+            <div className="priority-match-heading"><span>{item.intensity === "must" ? "优先核实" : "待核实"}</span><h4>{item.label}</h4><em>{intensityLabel[item.intensity]} · {evidenceLabel[item.evidenceLevel]}</em></div>
+            <blockquote>{item.snippet}</blockquote>
+            <dl><div><dt>简历证据</dt><dd>{item.sources.length ? item.sources.join("、") : "未找到"}</dd></div><div><dt>判断原因</dt><dd>{item.reason}</dd></div><div><dt>安全下一步</dt><dd>{item.nextStep}</dd></div></dl>
+            <details className="match-evidence-detail"><summary>查看证据</summary><p>{item.sources.length ? `精确来源：${item.sources.join("、")}。` : "当前选中简历的事实包中没有直接来源。"}</p></details>
+            <div className="match-review-actions">
+              {item.suggestedModule ? <button type="button" onClick={() => editRequirement(item.suggestedModule as StandardModuleKey)}>我有真实经历，但简历没写</button> : <details><summary>我有真实经历，但简历没写</summary><fieldset><legend>选择要编辑的模块</legend>{(["experience", "project", "campus", "education", "skills"] as StandardModuleKey[]).map((module) => <button type="button" key={module} onClick={() => editRequirement(module)}>{moduleMeta[module].label}</button>)}</fieldset></details>}
+              {item.kind === "requirement" && <><button type="button" aria-pressed={review === "inaccurate"} onClick={() => reviewRequirement(item.id, review === "inaccurate" ? null : "inaccurate")}>这条证据匹配不准确</button><button type="button" aria-pressed={review === "confirmed_gap"} onClick={() => reviewRequirement(item.id, review === "confirmed_gap" ? null : "confirmed_gap")}>我确实没有这项经历</button></>}
+            </div>
+          </li>;
+        })}</ol> : <p className="priority-match-empty">当前没有需要优先处理的文字证据问题；仍建议查看完整解析并本人核实。</p>}
+        {Object.keys(reviews).length > 0 && <div className="match-review-summary" aria-live="polite"><strong>本次会话核实记录</strong><ul>{Object.entries(reviews).map(([requirementId, decision]) => { const requirement = analysis.requirements?.find((item) => item.id === requirementId); return <li key={requirementId}>{requirement?.label ?? requirementId}：{decision === "inaccurate" ? "证据匹配待复核，已排除相关建议" : "已确认当前缺口"}<button type="button" onClick={() => reviewRequirement(requirementId, null)}>撤销</button></li>; })}</ul></div>}
+      </section>
+
+      {!!constraints.length && <section className="constraint-assessments"><h3>硬性条件核实</h3><p>信息不足不会判为不匹配。</p><ul>{constraints.map((item) => <li key={`${item.id}-${item.jdSnippet}`}><div><strong>{item.label}</strong><span>{evidenceLabel[item.status]}</span></div><q>{item.jdSnippet}</q><p>{item.reason}</p></li>)}</ul></section>}
       <div className="breakdown-grid">
         {[
           ["岗位要求文字证据", `${analysis.matched.length}/${analysis.keywords.length}`, "本地规则识别要求中已有简历文字证据的项目"],
