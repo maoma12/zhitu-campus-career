@@ -7,6 +7,33 @@ export const LEGACY_SHARED_WORKSPACE_KEYS = [
 
 const ACCOUNT_WORKSPACE_KEY_PREFIX = "zhitu-workspace-user-v1:";
 
+export type WorkspacePersistenceTarget = "none" | "anonymous" | "account";
+
+export function selectWorkspacePersistenceTarget({
+  guestMode,
+  localPreviewMode,
+  userId,
+}: {
+  guestMode: boolean;
+  localPreviewMode: boolean;
+  userId: string | null;
+}): WorkspacePersistenceTarget {
+  // Guest mode wins even if stale session state briefly survives a render.
+  if (guestMode || localPreviewMode) return "anonymous";
+  return userId ? "account" : "none";
+}
+
+export function resolveAnonymousWorkspace<T>(
+  anonymousCache: T | null,
+  createCleanWorkspace: () => T,
+) {
+  return anonymousCache ?? createCleanWorkspace();
+}
+
+export function clearAnonymousWorkspace(storage: Pick<Storage, "removeItem">) {
+  storage.removeItem(ANONYMOUS_WORKSPACE_KEY);
+}
+
 export function accountWorkspaceKey(userId: string) {
   const normalizedUserId = userId.trim();
   if (!normalizedUserId) throw new Error("用户 ID 不能为空");

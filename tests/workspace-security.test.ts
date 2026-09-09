@@ -5,10 +5,13 @@ import {
   ANONYMOUS_WORKSPACE_KEY,
   accountWorkspaceKey,
   advanceIdentityEpoch,
+  clearAnonymousWorkspace,
   isCurrentIdentity,
   removeCurrentResumeSnapshot,
   removeResumeFromWorkspace,
+  resolveAnonymousWorkspace,
   resolveAuthenticatedWorkspace,
+  selectWorkspacePersistenceTarget,
 } from "../app/lib/workspace-security.ts";
 
 type FixtureWorkspace = { owner: string; resumes: string[] };
@@ -60,6 +63,31 @@ test("旧公共缓存键和匿名缓存键都不会成为登录账号缓存键",
     cleanWorkspace,
   );
   assert.equal(resolved.source, "clean");
+});
+
+test("免登录体验只读取匿名缓存，不读取账号或旧公共缓存", () => {
+  const anonymous = { owner: "TEST FIXTURE: guest", resumes: ["guest resume"] };
+  const account = { owner: "TEST FIXTURE: account", resumes: ["private resume"] };
+  const legacy = { owner: "TEST FIXTURE: legacy", resumes: ["legacy resume"] };
+
+  assert.equal(resolveAnonymousWorkspace(anonymous, cleanWorkspace), anonymous);
+  assert.deepEqual(resolveAnonymousWorkspace(null, cleanWorkspace), cleanWorkspace());
+  assert.notEqual(resolveAnonymousWorkspace(anonymous, cleanWorkspace), account);
+  assert.notEqual(resolveAnonymousWorkspace(anonymous, cleanWorkspace), legacy);
+});
+
+test("访客持久化目标始终为匿名且不允许进入账号云端路径", () => {
+  assert.equal(selectWorkspacePersistenceTarget({ guestMode: true, localPreviewMode: false, userId: "TEST-USER-A" }), "anonymous");
+  assert.equal(selectWorkspacePersistenceTarget({ guestMode: false, localPreviewMode: false, userId: "TEST-USER-A" }), "account");
+  assert.equal(selectWorkspacePersistenceTarget({ guestMode: false, localPreviewMode: false, userId: null }), "none");
+});
+
+test("清除体验数据只删除匿名键", () => {
+  const removed: string[] = [];
+  clearAnonymousWorkspace({ removeItem: (key) => removed.push(key) });
+  assert.deepEqual(removed, [ANONYMOUS_WORKSPACE_KEY]);
+  assert.notEqual(removed[0], accountWorkspaceKey("TEST-USER-A"));
+  assert.equal(removed.includes("zhitu-workspace-v1"), false);
 });
 
 test("退出或切换身份后旧用户的延迟保存代次失效", () => {

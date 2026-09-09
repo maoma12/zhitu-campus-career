@@ -36,11 +36,15 @@ import {
   LEGACY_SHARED_WORKSPACE_KEYS,
   accountWorkspaceKey,
   advanceIdentityEpoch,
+  clearAnonymousWorkspace,
   isCurrentIdentity,
   removeCurrentResumeSnapshot,
   removeResumeFromWorkspace,
+  resolveAnonymousWorkspace,
   resolveAuthenticatedWorkspace,
+  selectWorkspacePersistenceTarget,
 } from "./lib/workspace-security";
+import { toPasswordAuthUserMessage } from "./lib/auth-errors";
 import {
   analyzeJD,
   assessJDInput,
@@ -1443,7 +1447,9 @@ export default function Home() {
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [authMessageIsError, setAuthMessageIsError] = useState(false);
   const [localPreviewMode, setLocalPreviewMode] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
   const [persistence, setPersistence] = useState<{
     identity: IdentityEpoch;
     cloudSaveAllowed: boolean;
@@ -1567,9 +1573,15 @@ export default function Home() {
       resetSensitiveState();
       setPersistence(null);
       try {
-        const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
+        const localPreviewHost = ["localhost", "127.0.0.1", "::1"].includes(
           window.location.hostname,
         );
+        // Keeps normal local preview behavior while allowing an explicit,
+        // local-only QA pass through the production login and guest entry.
+        const forceLocalAuthPreview =
+          localPreviewHost &&
+          new URLSearchParams(window.location.search).get("auth") === "1";
+        const localPreview = localPreviewHost && !forceLocalAuthPreview;
         if (localPreview) {
           const identity = advanceIdentityEpoch(identityRef.current, null);
           identityRef.current = identity;
@@ -1602,7 +1614,7 @@ export default function Home() {
           } catch (error) {
             if (loadController.signal.aborted) return;
             cloudResult = { status: "unavailable" } as const;
-            setAuthMessage(
+          setAuthMessage(
               error instanceof Error
                 ? `云端读取失败：${error.message}。已暂停云端自动保存。`
                 : "云端读取失败，已暂停云端自动保存。",
@@ -1620,6 +1632,7 @@ export default function Home() {
             accountCache,
             createCleanWorkspace,
           );
+          setAuthMessageIsError(true);
           applyWorkspace(resolved.workspace);
           setPersistence({
             identity,
@@ -1635,6 +1648,7 @@ export default function Home() {
         }
       } catch (error) {
         setAuthMessage(error instanceof Error ? error.message : "登录状态读取失败");
+        setAuthMessageIsError(true);
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -1661,7 +1675,12 @@ export default function Home() {
         histories,
         jobTargets,
       };
-      if (session) {
+      const target = selectWorkspacePersistenceTarget({
+        guestMode,
+        localPreviewMode,
+        userId: session?.user.id ?? null,
+      });
+      if (target === "account" && session) {
         if (expectedIdentity.userId !== session.user.id) return;
         localStorage.setItem(
           accountWorkspaceKey(session.user.id),
@@ -1686,7 +1705,7 @@ export default function Home() {
               setSaveStatus("云端保存失败，已保存在本账号设备缓存");
             }
           });
-      } else {
+      } else if (target === "anonymous") {
         if (expectedIdentity.userId !== null) return;
         localStorage.setItem(
           ANONYMOUS_WORKSPACE_KEY,
@@ -1699,7 +1718,7 @@ export default function Home() {
       window.clearTimeout(timer);
       saveController.abort();
     };
-  }, [resumes, currentId, template, histories, jobTargets, ready, session, persistence]);
+  }, [resumes, currentId, template, histories, jobTargets, ready, session, persistence, guestMode, localPreviewMode]);
 
   useEffect(() => {
     if (!session) return;
@@ -1713,6 +1732,7 @@ export default function Home() {
       setSession(null);
       resetSensitiveState();
       setAuthMessage("登录状态已失效，请重新登录");
+      setAuthMessageIsError(true);
       setReady(true);
     };
 
@@ -2389,18 +2409,22 @@ export default function Home() {
     const email = authEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setAuthMessage("请输入有效的邮箱地址");
+      setAuthMessageIsError(true);
       return;
     }
     if (authPassword.length < 8) {
       setAuthMessage("密码至少需要 8 位");
+      setAuthMessageIsError(true);
       return;
     }
     if (authMode === "register" && authPassword !== authPasswordConfirm) {
       setAuthMessage("两次输入的密码不一致");
+      setAuthMessageIsError(true);
       return;
     }
     setAuthLoading(true);
     setAuthMessage("");
+    setAuthMessageIsError(false);
     try {
       const activeSession =
         authMode === "register"
@@ -2409,16 +2433,8 @@ export default function Home() {
       setSession(activeSession);
       window.location.reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "登录失败";
-      const friendlyMessage =
-        message === "Invalid login credentials"
-          ? "邮箱或密码错误"
-          : message.toLowerCase().includes("already registered")
-            ? "该邮箱已注册，请切换到登录"
-            : message.toLowerCase().includes("password")
-              ? "密码不符合安全要求，请至少使用 8 位字符"
-              : message;
-      setAuthMessage(friendlyMessage);
+      setAuthMessage(toPasswordAuthUserMessage(error, authMode));
+      setAuthMessageIsError(true);
     } finally {
       setAuthLoading(false);
     }
@@ -2432,6 +2448,53 @@ export default function Home() {
     resetSensitiveState();
     setReady(true);
     await signOut(previousSession);
+  };
+
+  const currentWorkspace = (): StoredWorkspace => ({
+    resumes,
+    currentId,
+    template,
+    histories,
+    jobTargets,
+  });
+
+  const enterGuestMode = () => {
+    const identity = advanceIdentityEpoch(identityRef.current, null);
+    identityRef.current = identity;
+    setPersistence(null);
+    setSession(null);
+    setAuthEmail("");
+    setAuthPassword("");
+    setAuthPasswordConfirm("");
+    resetSensitiveState();
+    const anonymous = readLocalWorkspace(ANONYMOUS_WORKSPACE_KEY) as StoredWorkspace | null;
+    applyWorkspace(resolveAnonymousWorkspace(anonymous, createCleanWorkspace));
+    setGuestMode(true);
+    setPersistence({ identity, cloudSaveAllowed: false });
+    setAuthMessage("");
+    setAuthMessageIsError(false);
+    setReady(true);
+  };
+
+  const exitGuestMode = () => {
+    localStorage.setItem(ANONYMOUS_WORKSPACE_KEY, JSON.stringify(currentWorkspace()));
+    identityRef.current = advanceIdentityEpoch(identityRef.current, null);
+    setPersistence(null);
+    setGuestMode(false);
+    resetSensitiveState();
+    setAuthMessage("体验数据已保留在当前浏览器，可再次进入继续编辑");
+    setAuthMessageIsError(false);
+  };
+
+  const clearGuestData = () => {
+    if (!window.confirm("清除当前浏览器中的免登录体验数据？此操作无法撤销，不会影响任何账号数据。")) return;
+    identityRef.current = advanceIdentityEpoch(identityRef.current, null);
+    setPersistence(null);
+    clearAnonymousWorkspace(localStorage);
+    setGuestMode(false);
+    resetSensitiveState();
+    setAuthMessage("本机体验数据已清除，账号数据未受影响");
+    setAuthMessageIsError(false);
   };
 
   const deleteSnapshot = (snapshot: ResumeSnapshot) => {
@@ -2469,13 +2532,14 @@ export default function Home() {
     );
   }
 
-  if (cloudConfigured && !session && !localPreviewMode) {
+  if (cloudConfigured && !session && !localPreviewMode && !guestMode) {
     return (
       <AuthPage
         mode={authMode}
         setMode={(mode) => {
           setAuthMode(mode);
           setAuthMessage("");
+          setAuthMessageIsError(false);
           setAuthPassword("");
           setAuthPasswordConfirm("");
         }}
@@ -2487,7 +2551,9 @@ export default function Home() {
         setPasswordConfirm={setAuthPasswordConfirm}
         loading={authLoading}
         message={authMessage}
+        messageIsError={authMessageIsError}
         submit={submitPasswordAuth}
+        enterGuest={enterGuestMode}
       />
     );
   }
@@ -2533,21 +2599,40 @@ export default function Home() {
             <strong>只基于已有内容</strong>
             <p>规则建议由你确认后生效</p>
           </div>
-          <button
-            className="profile-chip"
-            onClick={session ? handleSignOut : undefined}
-            title={session ? "点击退出登录" : "本机模式"}
-          >
-            <span>{session?.user.email.slice(0, 1).toUpperCase() ?? "本"}</span>
-            <span>
-              <strong>{session?.user.email ?? "本机模式"}</strong>
-              <small>{session ? "云端同步 · 点击退出" : "数据仅存本机"}</small>
-            </span>
-          </button>
+          {session ? (
+            <button
+              className="profile-chip"
+              onClick={handleSignOut}
+              title="点击退出登录"
+            >
+              <span>{session.user.email.slice(0, 1).toUpperCase()}</span>
+              <span>
+                <strong>{session.user.email}</strong>
+                <small>云端同步 · 点击退出</small>
+              </span>
+            </button>
+          ) : (
+            <div className="profile-chip" title={guestMode ? "免登录体验" : "本机模式"}>
+              <span>本</span>
+              <span>
+                <strong>{guestMode ? "免登录体验" : "本机模式"}</strong>
+                <small>数据仅存本机</small>
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
       <section className="app-main">
+        {guestMode && (
+          <aside className="guest-mode-bar" aria-label="免登录体验状态">
+            <p><strong>免登录体验</strong><span>数据仅保存在当前浏览器，不会上传或云端同步。</span></p>
+            <div>
+              <button type="button" onClick={exitGuestMode}>退出体验</button>
+              <button type="button" className="danger" onClick={clearGuestData}>清除本机体验数据</button>
+            </div>
+          </aside>
+        )}
         {view === "dashboard" && (
           <Dashboard
             resumes={resumes}
@@ -2944,7 +3029,9 @@ function AuthPage({
   setPasswordConfirm,
   loading,
   message,
+  messageIsError,
   submit,
+  enterGuest,
 }: {
   mode: "login" | "register";
   setMode: (value: "login" | "register") => void;
@@ -2956,8 +3043,14 @@ function AuthPage({
   setPasswordConfirm: (value: string) => void;
   loading: boolean;
   message: string;
+  messageIsError: boolean;
   submit: () => void;
+  enterGuest: () => void;
 }) {
+  const messageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (message) messageRef.current?.focus();
+  }, [message]);
   return (
     <main className="auth-page">
       <section className="auth-brand-panel">
@@ -3055,7 +3148,24 @@ function AuthPage({
                 ? "登录"
                 : "注册并进入"}
           </button>
-          {message && <div className="auth-message">{message}</div>}
+          {message && (
+            <div
+              ref={messageRef}
+              className={`auth-message ${messageIsError ? "error" : "status"}`}
+              role={messageIsError ? "alert" : "status"}
+              aria-live={messageIsError ? "assertive" : "polite"}
+              tabIndex={-1}
+            >
+              {message}
+            </div>
+          )}
+          <div className="guest-entry">
+            <span aria-hidden="true">或</span>
+            <button className="btn guest" type="button" onClick={enterGuest}>
+              免登录体验
+            </button>
+            <p>数据仅保存在当前浏览器，不会上传或云端同步；清除浏览器数据后可能丢失。</p>
+          </div>
           <small>账号仅用于隔离和保存你的数据；简历正文不会被发送给 AI 服务。</small>
         </form>
       </section>

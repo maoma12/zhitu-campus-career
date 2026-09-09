@@ -965,6 +965,42 @@ select:focus-visible {
   gap: 5px;
 }
 
+.auth-message.error {
+  color: #7a271a;
+  background: #fff1ef;
+  border: 1px solid #f2c8c1;
+}
+
+.auth-message:focus-visible {
+  outline: 3px solid rgba(35, 118, 84, 0.28);
+  outline-offset: 2px;
+}
+
+.guest-entry {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  text-align: center;
+}
+
+.guest-entry > span {
+  color: #7b8981;
+  font-size: 12px;
+}
+
+.auth-card .btn.guest {
+  border: 1px solid #237654;
+  color: #175b41;
+  background: #f5fbf7;
+}
+
+.guest-entry p {
+  margin: 0;
+  color: #64736b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .card-meta button {
   border: 0;
   background: transparent;
@@ -4262,7 +4298,7 @@ select:focus-visible {
   .profile-chip {
     justify-content: center;
   }
-  .app-main {
+.app-main {
     width: calc(100% - 76px);
     margin-left: 76px;
   }
@@ -4275,6 +4311,55 @@ select:focus-visible {
   .optimization-summary {
     display: none;
   }
+}
+
+.guest-mode-bar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 24px;
+  border-bottom: 1px solid #d7e5dc;
+  background: rgba(245, 251, 247, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.guest-mode-bar p,
+.guest-mode-bar div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.guest-mode-bar p span {
+  color: #5d6e64;
+  font-size: 12px;
+}
+
+.guest-mode-bar button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #b9ccc0;
+  border-radius: 10px;
+  color: #194b38;
+  background: white;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.guest-mode-bar button.danger {
+  color: #8a2f22;
+  border-color: #e2bbb4;
+}
+
+.guest-mode-bar button:focus-visible,
+.auth-card .btn.guest:focus-visible {
+  outline: 3px solid rgba(35, 118, 84, 0.28);
+  outline-offset: 2px;
 }
 
 @media (max-width: 900px) {
@@ -4371,6 +4456,25 @@ select:focus-visible {
 }
 
 @media (max-width: 620px) {
+  .guest-mode-bar {
+    position: relative;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .guest-mode-bar p {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .guest-mode-bar div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .guest-mode-bar button {
+    white-space: normal;
+  }
   .modal-backdrop {
     padding: max(8px, env(safe-area-inset-top))
       max(8px, env(safe-area-inset-right))
